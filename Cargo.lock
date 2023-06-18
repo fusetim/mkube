@@ -636,6 +636,7 @@ dependencies = [
 name = "mkube"
 version = "0.1.0"
 dependencies = [
+ "crossterm",
  "metadata",
  "tmdb-api",
  "tui",
