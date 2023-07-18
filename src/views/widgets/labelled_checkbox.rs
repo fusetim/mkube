@@ -10,30 +10,30 @@ use std::io::stdout;
 use crossterm::event::{KeyEvent};
 
 use crate::util::{OwnedSpan, OwnedSpans};
-use crate::views::widgets::input::{Input, InputState};
+use crate::views::widgets::checkbox::{Checkbox, CheckboxState};
 
 #[derive(Clone, Debug)]
-pub struct LabelledInput {
-    pub input: Input,
+pub struct LabelledCheckbox {
+    pub checkbox: Checkbox,
     pub label: OwnedSpans,
     pub label_constraint: Constraint,
 }
 
-impl LabelledInput {
-    pub fn new<T>(label: T, input: Input) -> Self 
+impl LabelledCheckbox {
+    pub fn new<T>(label: T, checkbox: Checkbox) -> Self 
     where T: Into<OwnedSpans>
     {
         let label = label.into();
         let width = label.width();
         Self {
-            input,
+            checkbox,
             label,
             label_constraint: Constraint::Length(width as u16),
         }
     }
 
-    pub fn with_input(&mut self, input: Input) {
-        self.input = input;
+    pub fn with_checkbox(&mut self, checkbox: Checkbox) {
+        self.checkbox = checkbox;
     }
 
     pub fn with_label<T>(&mut self, label: T) 
@@ -48,38 +48,43 @@ impl LabelledInput {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct LabelledInputState {
-    input_state: InputState,
+pub struct LabelledCheckboxState {
+    checkbox_state: CheckboxState,
 }
 
-impl LabelledInputState {
+impl LabelledCheckboxState {
     pub fn input(&mut self, kev: KeyEvent) -> bool {
-        self.input_state.input(kev)
+        self.checkbox_state.input(kev)
     }
 
     pub fn focus(&mut self, f: bool) {
-        self.input_state.set_focus(f);
+        self.checkbox_state.focus(f);
     }
 
     pub fn toggle(&mut self, d: bool) {
-        self.input_state.toggle(d);
+        self.checkbox_state.toggle(d);
     }
 
     pub fn is_focused(&self) -> bool {
-        self.input_state.is_focused()
+        self.checkbox_state.is_focused()
     }
 
-    pub fn is_disabled(&self) -> bool {
-        self.input_state.is_disabled()
+    pub fn is_enabled(&self) -> bool {
+        self.checkbox_state.is_enabled()
     }
 
-    pub fn get_value<'a>(&'a self) -> &'a str {
-        self.input_state.get_value()
+    pub fn check(&mut self, state: bool) {
+        self.checkbox_state.check(state);
+    } 
+
+    pub fn is_checked(&self) -> bool {
+        self.checkbox_state.is_checked()
     }
+
 }
 
-impl StatefulWidget for LabelledInput {
-    type State = LabelledInputState;
+impl StatefulWidget for LabelledCheckbox {
+    type State = LabelledCheckboxState;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let rows = Layout::default()
@@ -103,6 +108,6 @@ impl StatefulWidget for LabelledInput {
 
         let label = Paragraph::new(self.label).wrap(Wrap { trim: true});
         Widget::render(label, chunks[0], buf);
-        StatefulWidget::render(self.input, chunks[1], buf, &mut state.input_state);
+        StatefulWidget::render(self.checkbox, chunks[1], buf, &mut state.checkbox_state);
     }
 }

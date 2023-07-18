@@ -11,8 +11,7 @@ use tui::{
 use crossterm::event::{KeyEvent, KeyCode, KeyModifiers};
 
 use crate::multifs::MultiFs;
-use crate::views::widgets::input::{Input, InputState};
-use crate::views::widgets::labelled_input::{LabelledInput, LabelledInputState};
+use crate::views::widgets::{Input, InputState, LabelledInput, LabelledInputState};
 
 #[derive(Clone, Debug)]
 pub struct SettingsPage {
@@ -41,7 +40,7 @@ impl SettingsState {
                 if kev.code == KeyCode::Enter {
                     if let Some(select) = state.selected() {
                         let mut estate = SettingsEditState::default();
-                        estate.name.set_focus(true);
+                        estate.name.focus(true);
                         *self = SettingsState::Edit(estate);
                         return true
                     }
@@ -232,7 +231,6 @@ impl StatefulWidget for SettingsEdit {
 
 impl SettingsEditState {
     pub fn press_key(&mut self, kev: KeyEvent) -> bool {
-        //self.name.input_without_shortcuts(kev)
         self.name.input(kev)
     }
 }

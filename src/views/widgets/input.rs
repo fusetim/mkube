@@ -6,7 +6,6 @@ use tui::{
     layout::{Rect, Constraint, Direction, Layout},
 };
 use crossterm::event::{KeyEvent, KeyCode, KeyModifiers};
-use std::io::stdout;
 
 #[derive(Clone, Debug)]
 pub struct Input {
