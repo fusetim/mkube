@@ -66,7 +66,7 @@ where B: tui::backend::Backend
     mkube::MESSAGE_SENDER.set(sender).map_err(|err| anyhow!("Failed to init MESSAGE_SENDER, causes:\n{:?}", err))?;
     let app = views::App { settings_page: views::settings::SettingsPage::new() };
     let mut state = views::AppState{
-        settings_state: views::settings::SettingsState::Menu(views::settings::SettingsMenuState::new(&app.settings_page.menu, views::settings::standard_actions())),
+        settings_state: views::settings::SettingsState::Menu(views::settings::SettingsMenuState::new(views::settings::standard_actions())),
         ..Default::default()
     };
     let kill = time::sleep(Duration::from_secs(120));
@@ -95,7 +95,7 @@ where B: tui::backend::Backend
                             if kev.code == KeyCode::Char('c') && kev.modifiers == KeyModifiers::CONTROL {
                                 break;
                             }
-                            state.register_event(views::Event::Key(kev));
+                            state.register_event(mkube::AppEvent::KeyEvent(kev));
                         }
 
                         if event == Event::Key(KeyCode::Esc.into()) {
@@ -111,11 +111,17 @@ where B: tui::backend::Backend
                     use mkube::AppMessage;
                     match msg {
                         AppMessage::Future(builder) => {
-                            let app_event = builder(&mut state).await;
+                            if let Some(app_event) = builder(&mut state).await {
+                                state.register_event(app_event);
+                            }
+                        },
+                        AppMessage::TriggerEvent(evt) => {
+                            state.register_event(evt);
                         },
                         AppMessage::Close => {
                             break;
-                        }
+                        },
+                        _ => { unimplemented!(); }
                     }
                 } else {
                     break;

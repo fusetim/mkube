@@ -8,17 +8,37 @@ use tui::{
     style::{Style, Color},
     buffer::Buffer,
 };
+use std::pin::Pin;
+use std::future::Future;
 use crossterm::event::{KeyEvent, KeyCode, KeyModifiers};
 
 pub mod home;
 pub mod settings;
 pub mod widgets;
 
+use crate::multifs::{MultiFs};
 use settings::{SettingsPage, SettingsState};
 
-#[derive(Clone, Debug)]
-pub enum Event {
-    Key(KeyEvent),
+pub enum AppMessage {
+    Future(Box<dyn FnOnce(&mut AppState) -> Pin<Box<dyn Future<Output=Option<AppEvent>>>> + Send + Sync>),
+    TriggerEvent(AppEvent),
+    Close,    
+}
+
+impl std::fmt::Debug for AppMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            AppMessage::Close => write!(f, "AppMessage::Close"),
+            AppMessage::Future(_) => write!(f, "AppMessage::Future(<builder>)"),
+            AppMessage::TriggerEvent(evt) => write!(f, "AppMessage::TriggerEvent({:?})", evt),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum AppEvent {
+    KeyEvent(KeyEvent),
+    SettingsEvent(settings::SettingsEvent),
 }
 
 #[derive(Default)]
@@ -42,8 +62,9 @@ impl From<&TabState> for usize {
 pub struct AppState {
     pub tab: TabState,
     pub frame_number: usize,
-    pub events: Vec<Event>,
+    pub events: Vec<AppEvent>,
     pub settings_state: SettingsState,
+    pub libraries: Vec<MultiFs>, 
 }
 
 impl AppState {
@@ -51,19 +72,30 @@ impl AppState {
         self.frame_number += 1;
     } 
 
-    pub fn register_event(&mut self, event: Event) {
-        if let Event::Key(kev) = event {
-            if kev.code == KeyCode::Char('s') && kev.modifiers == KeyModifiers::ALT {
-                self.tab = TabState::Settings(self.settings_state.clone());
+    pub fn register_event(&mut self, evt: AppEvent) -> bool {
+        self.events.push(evt.clone());
+        match evt {
+            AppEvent::KeyEvent(kev) => {
+                if kev.code == KeyCode::Char('s') && kev.modifiers == KeyModifiers::ALT {
+                    self.tab = TabState::Settings(self.settings_state.clone());
+                    true
+                } else if kev.code == KeyCode::Char('h') && kev.modifiers == KeyModifiers::ALT {
+                    self.tab = TabState::Home;
+                    true
+                } else if let TabState::Settings(ref mut sstate) = self.tab {
+                    sstate.press_key(kev.clone())
+                } else {
+                    false
+                }
             }
-            if kev.code == KeyCode::Char('h') && kev.modifiers == KeyModifiers::ALT {
-                self.tab = TabState::Home;
-            }
-            if let TabState::Settings(ref mut sstate) = self.tab {
-                sstate.press_key(kev.clone());
+            _ => {
+                if let TabState::Settings(ref mut sstate) = self.tab {
+                    sstate.input(evt)
+                } else {
+                    false
+                }
             }
         }
-        self.events.push(event);
     }
 
     pub fn clear_events(&mut self) {
@@ -102,7 +134,7 @@ impl StatefulWidget for App {
             self.settings_page.render(chunks[1], buf, sstate);
         } else {
             let child = Block::default()
-                .title(format!("Child  / Frame: {} / Events: {:?}", state.frame_number, state.events))
+                .title(format!("Child  / Frame: {} / Events: {:?} / Libraries: {}", state.frame_number, state.events, state.libraries.len()))
                 .borders(Borders::LEFT | Borders::RIGHT)
                 .border_style(Style::default().fg(Color::White))
                 .border_type(BorderType::Rounded)

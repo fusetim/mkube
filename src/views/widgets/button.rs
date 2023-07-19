@@ -44,17 +44,32 @@ pub struct ButtonState {
 
 
 impl Button {
-    pub fn with_style(mut self, text: Style) -> Self {
+    pub fn new<T>(text: T) -> Self 
+    where T: Into<OwnedSpans> {
+        let focused_style = Style::default().bg(Color::LightRed);
+        let normal_style = Style::default().bg(Color::White);
+        let clicked_style = Style::default().add_modifier(Modifier::BOLD);
+        let disabled_style = Style::default().bg(Color::Gray);
+        Button {
+            disabled_style,
+            focused_style,
+            normal_style,
+            clicked_style,
+            text: text.into(),
+        }
+    }
+
+    pub const fn with_style(mut self, text: Style) -> Self {
         self.normal_style = text;
         self
     }
 
-    pub fn with_focus_style(mut self, text: Style) -> Self {
+    pub const fn with_focus_style(mut self, text: Style) -> Self {
         self.focused_style = text;
         self
     }
 
-    pub fn with_disabled_style(mut self, text: Style) -> Self {
+    pub const fn with_disabled_style(mut self, text: Style) -> Self {
         self.disabled_style = text;
         self
     }

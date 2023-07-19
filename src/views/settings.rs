@@ -12,6 +12,7 @@ use crossterm::event::{KeyEvent, KeyCode, KeyModifiers};
 
 use crate::multifs::MultiFs;
 use crate::views::widgets::{Input, InputState, LabelledInput, LabelledInputState, LabelledCheckbox, LabelledCheckboxState, Checkbox, Button, ButtonState};
+use crate::{AppEvent, AppState, MESSAGE_SENDER};
 
 #[derive(Clone, Debug)]
 pub struct SettingsPage {
@@ -22,6 +23,11 @@ pub struct SettingsPage {
 pub enum SettingsState {
     Menu(SettingsMenuState),
     Edit(SettingsEditState),
+}
+
+#[derive(Clone, Debug)]
+pub enum SettingsEvent {
+    CloseEditor,
 }
 
 impl Default for SettingsState {
@@ -53,6 +59,22 @@ impl SettingsState {
         }
         false
     }
+
+    pub fn input(&mut self, evt: AppEvent) -> bool {
+        match evt {
+            AppEvent::KeyEvent(kev) => self.press_key(kev),
+            AppEvent::SettingsEvent(SettingsEvent::CloseEditor) => {
+                *self = SettingsState::Menu(SettingsMenuState::new(standard_actions()));
+                true
+            }
+            _ => {
+                match self {
+                    SettingsState::Menu(ref mut state) => state.input(evt),
+                    SettingsState::Edit(ref mut state) => state.input(evt),
+                }
+            },
+        }
+    }
 }
 
 impl SettingsPage {
@@ -75,6 +97,7 @@ impl StatefulWidget for SettingsPage {
         }
     }
 }
+
 
 #[derive(Clone, Debug, Default)]
 pub struct SettingsMenu {}
@@ -111,7 +134,7 @@ impl StatefulWidget for SettingsMenu {
 }
 
 impl SettingsMenuState {
-    pub fn new(menu: &SettingsMenu, items: Vec<MenuItem>) -> Self {
+    pub fn new(items: Vec<MenuItem>) -> Self {
         Self {
             list_state: ListState::default(),
             items
@@ -130,6 +153,13 @@ impl SettingsMenuState {
             true
         } else {
             false
+        }
+    }
+
+    pub fn input(&mut self, evt: AppEvent) -> bool {
+        match evt {
+            AppEvent::KeyEvent(kev) => self.press_key(kev),
+            _ => { false },
         }
     }
 
@@ -217,6 +247,7 @@ pub struct SettingsEdit {
 #[derive(Clone, Debug)]
 pub struct SettingsEditState {
     pub focused: usize,
+    pub fs_type: usize,
     pub name: LabelledInputState,
     pub host: Option<LabelledInputState>,
     pub username: Option<LabelledInputState>,
@@ -250,6 +281,7 @@ impl Default for SettingsEditState {
     fn default() -> SettingsEditState {
         SettingsEditState {
             focused: 0,
+            fs_type: 0,
             name: LabelledInputState::default(),
             host: Some(LabelledInputState::default()),
             username: Some(LabelledInputState::default()),
@@ -356,17 +388,39 @@ impl SettingsEditState {
                     self.tv_show.check(!self.movie.is_checked());
                 } else if self.focused == 6 {
                     self.movie.check(!self.tv_show.is_checked());
-                } else if self.focused == 9 {
-                    if self.cancel.is_clicked() {
-                        use crate::MESSAGE_SENDER;
-                        let sender = MESSAGE_SENDER.get().unwrap();
-                        sender.send(crate::AppMessage::Close).unwrap();
+                } else if self.cancel.is_clicked() {
+                    use crate::MESSAGE_SENDER;
+                    let sender = MESSAGE_SENDER.get().unwrap();
+                    sender.send(crate::AppMessage::TriggerEvent(crate::AppEvent::SettingsEvent(SettingsEvent::CloseEditor))).unwrap();
+                } else if self.save.is_clicked() {
+                    use crate::MESSAGE_SENDER;
+                    let sender = MESSAGE_SENDER.get().unwrap();
+                    if self.fs_type == 0 {
+                        use crate::multifs::{MultiFs};
+                        use crate::localfs::{LocalFs};
+                        use std::path::PathBuf;
+                        use std::str::FromStr;
+                        let path = self.path.get_value().to_owned();
+                        sender.send(crate::AppMessage::Future(Box::new(move |app_state: &mut AppState| { 
+                            let fs = MultiFs::Local(LocalFs::new(PathBuf::from_str(&path).unwrap()));
+                            app_state.libraries.push(fs);
+                            return Box::pin(async {
+                                return Some(crate::AppEvent::SettingsEvent(SettingsEvent::CloseEditor));
+                            });
+                        }))).unwrap();
                     }
                 }
                 true
             } else {
                 false
             }
+        }
+    }
+
+    pub fn input(&mut self, evt: AppEvent) -> bool {
+        match evt {
+            AppEvent::KeyEvent(kev) => self.press_key(kev),
+            _ => { false },
         }
     }
 
