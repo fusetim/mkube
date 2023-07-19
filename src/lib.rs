@@ -1,6 +1,9 @@
 use std::{io, io::Seek, thread, time::Duration, io::Cursor};
 use std::path::{PathBuf, Path};
 use std::str::FromStr;
+use std::pin::Pin;
+use std::future::Future;
+use std::sync::OnceLock;
 use core::convert::AsRef;
 use anyhow::{Result, anyhow};
 use tmdb_api::{
@@ -17,6 +20,7 @@ use tmdb_api::client::Client as TmdbClient;
 use remotefs::fs::{RemoteFs, Metadata};
 use tokio::fs::{File, read_dir};
 use tokio::io::{AsyncWriteExt,AsyncReadExt};
+use tokio::sync::mpsc::{UnboundedSender};
 use async_recursion::async_recursion;
 use url::Url;
 use remotefs_ftp::client::FtpFs;
@@ -41,6 +45,26 @@ pub mod util;
 use multifs::{MultiFs, OwnedCursor};
 
 const VIDEO_EXTENSIONS: &'static [&'static str] = &["mp4", "mov", "flv", "mkv", "webm", "m4v", "avi", "iso", "wmw", "mpg"];
+pub static MESSAGE_SENDER: OnceLock<UnboundedSender<AppMessage>> = OnceLock::new();
+
+pub enum AppMessage {
+    Future(Box<dyn FnOnce(&mut views::AppState) -> Pin<Box<dyn Future<Output=AppEvent>>> + Send + Sync>),
+    Close,    
+}
+
+impl std::fmt::Debug for AppMessage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
+        match self {
+            AppMessage::Close => write!(f, "AppMessage::Close"),
+            AppMessage::Future(_) => write!(f, "AppMessage::Future(<builder>)"),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum AppEvent {
+    KeyEvent(),
+}
 
 async fn download_file<'a, U>(lfs: &mut MultiFs, client: &reqwest::Client, output: PathBuf, url: U) -> Result<()>
 where U: Into<&'a str> + Clone {

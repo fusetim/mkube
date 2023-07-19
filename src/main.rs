@@ -3,6 +3,7 @@ use remotefs::fs::{RemoteFs, Metadata};
 use tokio::fs::{File, read_dir};
 use tokio::io::{AsyncWriteExt,AsyncReadExt};
 use tokio::time::{self, Duration};
+use tokio::sync::mpsc::{UnboundedSender, UnboundedReceiver, unbounded_channel};
 use anyhow::{Result, anyhow};
 use futures_util::{StreamExt, FutureExt};
 use std::{io};
@@ -61,6 +62,8 @@ async fn main() -> Result<()> {
 async fn run<B>(terminal: &mut Terminal<B>) -> Result<()> 
 where B: tui::backend::Backend
 {
+    let (sender, mut receiver) = unbounded_channel();
+    mkube::MESSAGE_SENDER.set(sender).map_err(|err| anyhow!("Failed to init MESSAGE_SENDER, causes:\n{:?}", err))?;
     let app = views::App { settings_page: views::settings::SettingsPage::new() };
     let mut state = views::AppState{
         settings_state: views::settings::SettingsState::Menu(views::settings::SettingsMenuState::new(&app.settings_page.menu, views::settings::standard_actions())),
@@ -101,6 +104,21 @@ where B: tui::backend::Backend
                     }
                     Some(Err(e)) => println!("Error: {:?}\r", e),
                     None => break,
+                }
+            }
+            msg = receiver.recv() => {
+                if let Some(msg) = msg {
+                    use mkube::AppMessage;
+                    match msg {
+                        AppMessage::Future(builder) => {
+                            let app_event = builder(&mut state).await;
+                        },
+                        AppMessage::Close => {
+                            break;
+                        }
+                    }
+                } else {
+                    break;
                 }
             }
             _ = &mut kill => {

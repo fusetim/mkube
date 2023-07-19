@@ -356,6 +356,12 @@ impl SettingsEditState {
                     self.tv_show.check(!self.movie.is_checked());
                 } else if self.focused == 6 {
                     self.movie.check(!self.tv_show.is_checked());
+                } else if self.focused == 9 {
+                    if self.cancel.is_clicked() {
+                        use crate::MESSAGE_SENDER;
+                        let sender = MESSAGE_SENDER.get().unwrap();
+                        sender.send(crate::AppMessage::Close).unwrap();
+                    }
                 }
                 true
             } else {
