@@ -1,4 +1,4 @@
-use tui::widgets::{StatefulWidget, Widget, Block, Tabs, Borders, BorderType, List, ListItem, ListState};
+use tui::widgets::{StatefulWidget, Widget, Block, Tabs, Borders, BorderType, List, ListItem, ListState, Paragraph};
 use tui::{
     backend::{Backend},
     layout::{Rect, Constraint, Direction, Layout},
@@ -11,7 +11,7 @@ use tui::{
 use crossterm::event::{KeyEvent, KeyCode, KeyModifiers};
 
 use crate::multifs::MultiFs;
-use crate::views::widgets::{Input, InputState, LabelledInput, LabelledInputState};
+use crate::views::widgets::{Input, InputState, LabelledInput, LabelledInputState, LabelledCheckbox, LabelledCheckboxState, Checkbox, Button, ButtonState};
 
 #[derive(Clone, Debug)]
 pub struct SettingsPage {
@@ -70,9 +70,7 @@ impl StatefulWidget for SettingsPage {
                 StatefulWidget::render(self.menu, area, buf, mstate);
             }
             SettingsState::Edit(ref mut estate) => {
-                let input = Input { placeholder: Some("Placeholder for a name".into()), ..Default::default() };
-                let labelled_input = LabelledInput::new("Name: ", input);
-                StatefulWidget::render(SettingsEdit { name: labelled_input}, area, buf, estate);
+                StatefulWidget::render(SettingsEdit::default(), area, buf, estate);
             }
         }
     }
@@ -205,18 +203,63 @@ pub enum MenuItemType {
 #[derive(Clone, Debug)]
 pub struct SettingsEdit {
     pub name: LabelledInput,
+    pub host: LabelledInput,
+    pub username: LabelledInput,
+    pub password: LabelledInput,
+    pub path: LabelledInput,
+    pub movie: LabelledCheckbox,
+    pub tv_show: LabelledCheckbox,
+    pub test: Button,
+    pub save: Button,
+    pub cancel: Button,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct SettingsEditState {
     pub focused: usize,
     pub name: LabelledInputState,
+    pub host: Option<LabelledInputState>,
+    pub username: Option<LabelledInputState>,
+    pub password: Option<LabelledInputState>,
+    pub path: LabelledInputState,
+    pub movie: LabelledCheckboxState,
+    pub tv_show: LabelledCheckboxState,
+    pub test: ButtonState,
+    pub save: ButtonState,
+    pub cancel: ButtonState,
 }
 
 impl Default for SettingsEdit {
     fn default() -> SettingsEdit {
         SettingsEdit {
-            name: LabelledInput::new("Name", Input::default())
+            name: LabelledInput::new("Name: ", Input::default()), 
+            host: LabelledInput::new("Host: ", Input::default()),
+            username: LabelledInput::new("Username: ", Input::default()),
+            password: LabelledInput::new("Password: ", Input::default()),
+            path: LabelledInput::new("Path: ", Input::default()),
+            movie: LabelledCheckbox::new("Movie", Checkbox::default()),
+            tv_show: LabelledCheckbox::new("TV Show", Checkbox::default()),
+            test: Button::default().with_text("Test"),
+            save: Button::default().with_text("Save"),
+            cancel: Button::default().with_text("Cancel"),
+        } 
+    }
+}
+
+impl Default for SettingsEditState {
+    fn default() -> SettingsEditState {
+        SettingsEditState {
+            focused: 0,
+            name: LabelledInputState::default(),
+            host: Some(LabelledInputState::default()),
+            username: Some(LabelledInputState::default()),
+            password: Some(LabelledInputState::default()),
+            path: LabelledInputState::default(),
+            movie: LabelledCheckboxState::default(),
+            tv_show: LabelledCheckboxState::default(),   
+            test: ButtonState::default(),
+            save: ButtonState::default(),
+            cancel: ButtonState::default(),    
         } 
     }
 }
@@ -225,12 +268,140 @@ impl StatefulWidget for SettingsEdit {
     type State = SettingsEditState;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        StatefulWidget::render(self.name, area, buf, &mut state.name);
+        let rows = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(
+            [
+                Constraint::Min(1),
+                Constraint::Min(1),
+                Constraint::Min(1),
+                Constraint::Min(1),
+                Constraint::Min(1),
+                Constraint::Min(1),
+                Constraint::Min(1),
+                Constraint::Min(1),
+                Constraint::Percentage(100),
+            ].as_ref()
+        )
+        .split(area.clone());
+        let type_selector_cells = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(
+            [
+                Constraint::Min(14),
+                Constraint::Min(10),
+                Constraint::Min(2),
+                Constraint::Min(12),
+                Constraint::Percentage(100),
+            ].as_ref()
+        )
+        .split(rows[5]);
+        let buttons_cells = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints(
+            [
+                Constraint::Min(6),
+                Constraint::Min(2),
+                Constraint::Min(6),
+                Constraint::Min(2),
+                Constraint::Min(8),
+                Constraint::Percentage(100),
+            ].as_ref()
+        )
+        .split(rows[7]);
+
+        StatefulWidget::render(self.name, rows[0], buf, &mut state.name);
+        if let Some(ref mut istate) = state.host {
+            StatefulWidget::render(self.host, rows[1], buf, istate);
+        }
+        if let Some(ref mut istate) = state.username {
+            StatefulWidget::render(self.username, rows[2], buf, istate);
+        }
+        if let Some(ref mut istate) = state.password {
+            StatefulWidget::render(self.password, rows[3], buf, istate);
+        }
+        StatefulWidget::render(self.path, rows[4], buf, &mut state.path);
+
+        let type_label = Paragraph::new(Span::raw("Library type: "));
+        Widget::render(type_label, type_selector_cells[0], buf);
+        StatefulWidget::render(self.movie, type_selector_cells[1], buf, &mut state.movie);
+        StatefulWidget::render(self.tv_show, type_selector_cells[3], buf, &mut state.tv_show);
+        StatefulWidget::render(self.test, buttons_cells[0], buf, &mut state.test);
+        StatefulWidget::render(self.save, buttons_cells[2], buf, &mut state.save);
+        StatefulWidget::render(self.cancel, buttons_cells[4], buf, &mut state.cancel);
     }
 }
 
+const SETTINGS_EDIT_SELECTABLES : usize = 10; 
+
 impl SettingsEditState {
     pub fn press_key(&mut self, kev: KeyEvent) -> bool {
-        self.name.input(kev)
+        if kev.code == KeyCode::Tab {
+            self.focus_child(self.focused, false);
+            self.focused = ((self.focused + 1) % SETTINGS_EDIT_SELECTABLES);
+            while !self.focus_child(self.focused, true) {
+                self.focused = ((self.focused + 1) % SETTINGS_EDIT_SELECTABLES);
+            }
+            true
+        } else if kev.code == KeyCode::BackTab {
+            self.focus_child(self.focused, false);
+            self.focused = ((self.focused + SETTINGS_EDIT_SELECTABLES - 1) % SETTINGS_EDIT_SELECTABLES);
+            while !self.focus_child(self.focused, true) {
+                self.focused = ((self.focused + SETTINGS_EDIT_SELECTABLES -1 ) % SETTINGS_EDIT_SELECTABLES);
+            }
+            true
+        } else {
+            if self.input_child(self.focused, kev) {
+                if self.focused == 5 {
+                    self.tv_show.check(!self.movie.is_checked());
+                } else if self.focused == 6 {
+                    self.movie.check(!self.tv_show.is_checked());
+                }
+                true
+            } else {
+                false
+            }
+        }
+    }
+
+    fn focus_child(&mut self, index: usize, state: bool) -> bool {
+        match index {
+            0 => { self.name.focus(state); true },
+            1 => { self.host.as_mut().map(|u| u.focus(state)).is_some() },
+            2 => { self.username.as_mut().map(|u| u.focus(state)).is_some() },
+            3 => { self.password.as_mut().map(|u| u.focus(state)).is_some() },
+            4 => { self.path.focus(state); true},
+            5 => { self.movie.focus(state); true },
+            6 => { self.tv_show.focus(state); true },
+            7 => { self.test.focus(state); true },
+            8 => { self.save.focus(state); true },
+            9 => { self.cancel.focus(state); true },
+            _ => { true },
+        }
+    }
+
+    fn input_child(&mut self, index: usize, kev: KeyEvent) -> bool {
+        match index {
+            0 => { self.name.input(kev) },
+            1 => { 
+                let r = self.host.as_mut().map(|u| u.input(kev));
+                return r.is_some() && r.unwrap() 
+            },
+            2 => { 
+                let r = self.username.as_mut().map(|u| u.input(kev));
+                return r.is_some() && r.unwrap() 
+            },
+            3 => { 
+                let r = self.password.as_mut().map(|u| u.input(kev));
+                return r.is_some() && r.unwrap() 
+            },
+            4 => { self.path.input(kev) },
+            5 => { self.movie.input(kev) },
+            6 => { self.tv_show.input(kev) },
+            7 => { self.test.input(kev) },
+            8 => { self.save.input(kev) },
+            9 => { self.cancel.input(kev) },
+            _ => { false },
+        }
     }
 }

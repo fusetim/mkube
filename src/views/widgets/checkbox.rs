@@ -24,8 +24,8 @@ pub struct CheckboxState {
 impl Default for Checkbox {
     fn default() -> Checkbox {
         let check_style = Style::default().add_modifier(Modifier::BOLD);
-        let focus_style = Style::default().fg(Color::LightGreen);
-        let normal_style = Style::default().fg(Color::Red);
+        let focus_style = Style::default().fg(Color::LightRed);
+        let normal_style = Style::default().fg(Color::White);
         let disabled_style = Style::default().fg(Color::Gray);
         Checkbox {
             disabled_style: (check_style.clone(), disabled_style),

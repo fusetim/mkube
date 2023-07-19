@@ -11,7 +11,7 @@ pub struct OwnedSpan {
 }
 
 #[derive(Debug, Clone, Default)]
-pub struct OwnedSpans(Vec<OwnedSpan>);
+pub struct OwnedSpans(pub Vec<OwnedSpan>);
 
 impl OwnedSpan {
     pub fn width(&self) -> usize {
@@ -75,6 +75,11 @@ impl From<OwnedSpan> for OwnedSpans {
     }
 }
 
+impl From<Vec<OwnedSpan>> for OwnedSpans {
+    fn from(spans: Vec<OwnedSpan>) -> OwnedSpans {
+        OwnedSpans(spans)
+    }
+}
 
 impl<'a> From<Span<'a>> for OwnedSpans {
     fn from(span: Span<'a>) -> OwnedSpans {

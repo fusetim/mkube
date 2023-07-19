@@ -100,6 +100,8 @@ impl StatefulWidget for LabelledCheckbox {
         .direction(Direction::Horizontal)
         .constraints(
             [
+                Constraint::Length(3),
+                Constraint::Length(1),
                 self.label_constraint,
                 Constraint::Percentage(100),
             ].as_ref()
@@ -107,7 +109,7 @@ impl StatefulWidget for LabelledCheckbox {
         .split(rows[0]);
 
         let label = Paragraph::new(self.label).wrap(Wrap { trim: true});
-        Widget::render(label, chunks[0], buf);
-        StatefulWidget::render(self.checkbox, chunks[1], buf, &mut state.checkbox_state);
+        Widget::render(label, chunks[2], buf);
+        StatefulWidget::render(self.checkbox, chunks[0], buf, &mut state.checkbox_state);
     }
 }
