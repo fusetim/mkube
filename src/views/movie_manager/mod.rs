@@ -5,19 +5,24 @@ use tui::{
     widgets::{StatefulWidget, Widget, Block, Borders, BorderType},
 };
 
+use std::path::PathBuf;
+
 pub mod details;
 pub mod table;
+pub mod search;
 
-use table::{MovieTable, MovieTableState, MovieTableMessage, MovieTableEvent};
+use table::{MovieTable, MovieTableState};
+use search::{MovieSearch, MovieSearchState};
 use crate::{AppEvent, AppState, AppMessage};
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default)]
 pub struct MovieManager {
     table: MovieTable,
 }
 #[derive(Clone, Debug)]
 pub enum MovieManagerState {
     Table(MovieTableState),
+    Search(MovieSearch),
 }
 
 impl Default for MovieManagerState {
@@ -29,11 +34,16 @@ impl Default for MovieManagerState {
 #[derive(Clone, Debug, PartialEq)]
 pub enum MovieManagerEvent {
     ClearMovieList,
-    MovieDiscovered(crate::nfo::Movie),
+    MovieDiscovered((crate::nfo::Movie, PathBuf)),
+    MovieUpdated((crate::nfo::Movie, PathBuf)),
+    SearchMovie((crate::nfo::Movie, PathBuf)),
+    SearchResults(Vec<tmdb_api::movie::MovieShort>),
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum MovieManagerMessage {
     RefreshMovies,
+    SearchTitle(String),
+    SaveNfo((crate::nfo::Movie, PathBuf)),
 }
 
 impl StatefulWidget for MovieManager {

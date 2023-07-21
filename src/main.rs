@@ -150,17 +150,25 @@ where B: tui::backend::Backend
                                     if let Ok(paths) = mkube::analyze_library(&mut state.conns[i], state.libraries[i].path.clone(), 2).await {
                                         for path in paths {
                                             let placeholder_title = format!("{}", path.file_name().map(|s| s.to_string_lossy().to_owned()).unwrap_or("Invalid file name.".into()));
-                                            let movie = mkube::try_open_nfo(&mut state.conns[i], path).await.unwrap_or_else(|_| {
+                                            let movie = mkube::try_open_nfo(&mut state.conns[i], path.clone()).await.unwrap_or_else(|_| {
                                                 mkube::nfo::Movie {
                                                     title: placeholder_title,
                                                     ..Default::default()
                                                 }
                                             });
-                                            state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::MovieDiscovered(movie)));
+                                            state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::MovieDiscovered((movie, path))));
                                         }
                                     } 
                                 }
                             }
+                        },
+                        AppMessage::MovieManagerMessage(MovieManagerMessage::SearchTitle(title)) => {
+                            // TODO
+                            unimplemented!()
+                        },
+                        AppMessage::MovieManagerMessage(MovieManagerMessage::SaveNfo((nfo, path))) => {
+                            // TODO
+                            unimplemented!()
                         },
                         AppMessage::Close => {
                             break;

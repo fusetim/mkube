@@ -111,7 +111,7 @@ impl AppState {
                 } else {
                     false
                 }
-            }
+            },
             _ => {
                 if let TabState::Settings(ref mut sstate) = self.tab {
                     sstate.input(evt)

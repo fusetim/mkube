@@ -4,7 +4,8 @@ use tui::{
     layout::{Constraint, Rect, Direction},
     widgets::{StatefulWidget, Widget, Table, TableState, Row, Cell, Paragraph},
 };
-use crossterm::event::KeyCode;
+use crossterm::event::{KeyCode, KeyModifiers};
+use std::path::PathBuf;
 
 use crate::{AppEvent, AppState, AppMessage};
 use crate::nfo::{Movie};
@@ -16,13 +17,9 @@ pub struct MovieTable {}
 #[derive(Clone, Debug, Default)]
 pub struct MovieTableState {
     table_state: TableState,
-    movies: Vec<Movie>,
+    movies: Vec<(Movie, PathBuf)>,
     is_loading: bool,
 }
-#[derive(Clone, Debug, PartialEq)]
-pub enum MovieTableEvent {}
-#[derive(Clone, Debug, PartialEq)]
-pub enum MovieTableMessage {}
 
 impl StatefulWidget for MovieTable {
     type State = MovieTableState;
@@ -33,12 +30,12 @@ impl StatefulWidget for MovieTable {
             return;
         }
         if state.movies.len() == 0 {
-            Paragraph::new("No movie found. You might need to refresh the list? F5").render(area, buf);
+            Paragraph::new("No movie found. You might need to refresh the list? Ctrl+Shift+R").render(area, buf);
             return;
         }
 
         let rows : Vec<_> = state.movies.iter()
-            .map(|m| {
+            .map(|(m, _)| {
                 let title = m.title.clone();
                 let year = m.premiered.as_deref().unwrap_or("".into());
                 let source = m.source.as_deref().unwrap_or("".into());
@@ -48,21 +45,14 @@ impl StatefulWidget for MovieTable {
             .collect();
         
         let table = Table::new(rows)
-        // You can set the style of the entire Table.
         .style(Style::default().fg(Color::White))
-        // It has an optional header, which is simply a Row always visible at the top.
         .header(
             Row::new(vec!["Title", "Year", "Source", "Res."])
                 .style(Style::default().bg(Color::Blue).fg(Color::Black).add_modifier(Modifier::BOLD))
-                // If you want some space between the header and the rest of the rows, you can always
-                // specify some margin at the bottom.
                 .bottom_margin(1)
         )
-        // Columns widths are constrained in the same way as Layout...
         .widths(&[Constraint::Length(50), Constraint::Length(4), Constraint::Length(10), Constraint::Length(5)])
-        // ...and they can be separated by a fixed spacing.
         .column_spacing(1)
-        // If you wish to highlight a row in any specific way when it is selected...
         .highlight_style(Style::default().bg(Color::LightRed));
 
         StatefulWidget::render(table, area, buf, &mut state.table_state);
@@ -73,7 +63,7 @@ impl MovieTableState {
     pub fn input(&mut self, app_event: AppEvent) -> bool {
         match app_event {
             AppEvent::KeyEvent(kev) => {
-                if kev.code == KeyCode::Enter && (!self.is_loading) {
+                if kev.code == KeyCode::Char('R') && kev.modifiers == (KeyModifiers::SHIFT | KeyModifiers::CONTROL) && (!self.is_loading) {
                     let sender = MESSAGE_SENDER.get().unwrap();
                     sender.send(AppMessage::MovieManagerMessage(MovieManagerMessage::RefreshMovies)).unwrap();
                     self.is_loading = true;
@@ -84,6 +74,14 @@ impl MovieTableState {
                 } else if kev.code == KeyCode::Down && self.movies.len() > 0 {
                     self.table_state.select(self.table_state.selected().map(|c| (c + 1) % self.movies.len()).or(Some(0)));
                     true
+                } else if kev.code == KeyCode::Char('s') {
+                    if let Some(s) = self.table_state.selected() {
+                        let sender = MESSAGE_SENDER.get().unwrap();
+                        sender.send(AppMessage::TriggerEvent(AppEvent::MovieManagerEvent(MovieManagerEvent::SearchMovie(self.movies[s].clone())))).unwrap();
+                        true
+                    } else {
+                        false
+                    }
                 } else {
                     false
                 }
@@ -96,6 +94,15 @@ impl MovieTableState {
             AppEvent::MovieManagerEvent(MovieManagerEvent::MovieDiscovered(movie)) => {
                 self.is_loading = false;
                 self.movies.push(movie);
+                true
+            },
+            AppEvent::MovieManagerEvent(MovieManagerEvent::MovieUpdated((movie, path))) => {
+                self.is_loading = false;
+                if let Some((ind, _)) = self.movies.iter().enumerate().filter(|(_, (_,p))| p == &path).next() {
+                    self.movies[ind] = (movie, path);
+                } else {
+                    self.movies.push((movie, path));
+                }
                 true
             },
             _ => { false },
