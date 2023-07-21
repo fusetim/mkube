@@ -98,6 +98,10 @@ impl InputState {
         self.disabled
     }
 
+    pub fn set_value<T: Into<String>>(&mut self, val: T) {
+        self.value = val.into();
+    }
+
     pub fn get_value<'a>(&'a self) -> &'a str {
         &self.value
     }

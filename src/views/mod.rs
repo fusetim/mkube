@@ -17,11 +17,13 @@ pub mod settings;
 pub mod widgets;
 
 use crate::multifs::{MultiFs};
-use settings::{SettingsPage, SettingsState};
+use crate::library::Library;
+use settings::{SettingsPage, SettingsState, SettingsMessage};
 
 pub enum AppMessage {
     Future(Box<dyn FnOnce(&mut AppState) -> Pin<Box<dyn Future<Output=Option<AppEvent>>>> + Send + Sync>),
     TriggerEvent(AppEvent),
+    SettingsMessage(SettingsMessage),
     Close,    
 }
 
@@ -31,6 +33,7 @@ impl std::fmt::Debug for AppMessage {
             AppMessage::Close => write!(f, "AppMessage::Close"),
             AppMessage::Future(_) => write!(f, "AppMessage::Future(<builder>)"),
             AppMessage::TriggerEvent(evt) => write!(f, "AppMessage::TriggerEvent({:?})", evt),
+            AppMessage::SettingsMessage(msg) => write!(f, "AppMessage::SettingsMessage({:?})", msg),
         }
     }
 }
@@ -64,7 +67,8 @@ pub struct AppState {
     pub frame_number: usize,
     pub events: Vec<AppEvent>,
     pub settings_state: SettingsState,
-    pub libraries: Vec<MultiFs>, 
+    pub libraries: Vec<Library>, 
+    pub conns: Vec<MultiFs>,
 }
 
 impl AppState {
@@ -78,6 +82,13 @@ impl AppState {
             AppEvent::KeyEvent(kev) => {
                 if kev.code == KeyCode::Char('s') && kev.modifiers == KeyModifiers::ALT {
                     self.tab = TabState::Settings(self.settings_state.clone());
+                    use crate::MESSAGE_SENDER;
+                    let sender = MESSAGE_SENDER.get().unwrap();
+                    sender.send(crate::AppMessage::Future(Box::new(|appstate: &mut AppState| {
+                        let libs = appstate.libraries.clone(); 
+                        Box::pin(async move {
+                            Some(AppEvent::SettingsEvent(settings::SettingsEvent::OpenMenu(libs)))
+                    })}))).unwrap();
                     true
                 } else if kev.code == KeyCode::Char('h') && kev.modifiers == KeyModifiers::ALT {
                     self.tab = TabState::Home;

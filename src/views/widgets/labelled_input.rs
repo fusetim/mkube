@@ -73,6 +73,10 @@ impl LabelledInputState {
         self.input_state.is_disabled()
     }
 
+    pub fn set_value<T: Into<String>>(&mut self, val: T) {
+        self.input_state.set_value(val);
+    }
+
     pub fn get_value<'a>(&'a self) -> &'a str {
         self.input_state.get_value()
     }

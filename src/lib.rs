@@ -39,6 +39,7 @@ pub mod nfo;
 pub mod localfs;
 pub mod multifs;
 pub mod util;
+pub mod library;
 
 use multifs::{MultiFs, OwnedCursor};
 pub use views::{AppMessage, AppEvent, AppState};

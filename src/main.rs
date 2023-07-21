@@ -69,9 +69,7 @@ where B: tui::backend::Backend
         settings_state: views::settings::SettingsState::Menu(views::settings::SettingsMenuState::new(views::settings::standard_actions())),
         ..Default::default()
     };
-    let kill = time::sleep(Duration::from_secs(120));
     let mut event_reader = EventStream::new();
-    tokio::pin!(kill);
     let mut tick = time::interval(Duration::from_millis(1000/15));
     tokio::pin!(tick);
 
@@ -108,7 +106,7 @@ where B: tui::backend::Backend
             }
             msg = receiver.recv() => {
                 if let Some(msg) = msg {
-                    use mkube::AppMessage;
+                    use mkube::{AppMessage, AppEvent, views::settings::{SettingsMessage, SettingsEvent}, library::Library};
                     match msg {
                         AppMessage::Future(builder) => {
                             if let Some(app_event) = builder(&mut state).await {
@@ -118,6 +116,31 @@ where B: tui::backend::Backend
                         AppMessage::TriggerEvent(evt) => {
                             state.register_event(evt);
                         },
+                        AppMessage::SettingsMessage(SettingsMessage::OpenMenu) => {
+                            state.register_event(AppEvent::SettingsEvent(SettingsEvent::OpenMenu(state.libraries.clone())));
+                        },
+                        AppMessage::SettingsMessage(SettingsMessage::EditExisting(lib)) => {
+                            if let Some((ind, _)) = state.libraries.iter().enumerate().filter(|(_, l)| &&lib == l).next() {
+                                let l = state.libraries.swap_remove(ind);
+                                state.register_event(AppEvent::SettingsEvent(SettingsEvent::EditExisting(l)));
+                            } 
+                        },
+                        AppMessage::SettingsMessage(SettingsMessage::SaveLibrary(lib)) => {
+                            if let Ok(conn) = MultiFs::try_from(&lib) {
+                                state.conns.push(conn);
+                                state.libraries.push(lib);
+                            }
+                            state.register_event(AppEvent::SettingsEvent(SettingsEvent::OpenMenu(state.libraries.clone())));
+                        },
+                        AppMessage::SettingsMessage(SettingsMessage::TestLibrary(lib)) => {
+                            let rst = if let Ok(mut conn) = MultiFs::try_from(&lib) {
+                                let _ = conn.as_mut_rfs().connect();
+                                (conn.as_mut_rfs().is_connected(), conn.as_mut_rfs().exists(&lib.path.as_path()).unwrap_or(false))
+                            } else {
+                                (false, false)
+                            };
+                            state.register_event(AppEvent::SettingsEvent(SettingsEvent::ConnTestResult(rst)));
+                        },
                         AppMessage::Close => {
                             break;
                         },
@@ -126,9 +149,6 @@ where B: tui::backend::Backend
                 } else {
                     break;
                 }
-            }
-            _ = &mut kill => {
-                break;
             }
         }
     }
