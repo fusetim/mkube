@@ -7,6 +7,8 @@ use tokio::sync::mpsc::{UnboundedSender, UnboundedReceiver, unbounded_channel};
 use anyhow::{Result, anyhow};
 use futures_util::{StreamExt, FutureExt};
 use std::{io};
+use std::path::PathBuf;
+use std::str::FromStr;
 
 use tui::{
     backend::{Backend, CrosstermBackend},
@@ -64,11 +66,8 @@ where B: tui::backend::Backend
 {
     let (sender, mut receiver) = unbounded_channel();
     mkube::MESSAGE_SENDER.set(sender).map_err(|err| anyhow!("Failed to init MESSAGE_SENDER, causes:\n{:?}", err))?;
-    let app = views::App { settings_page: views::settings::SettingsPage::new() };
-    let mut state = views::AppState{
-        settings_state: views::settings::SettingsState::Menu(views::settings::SettingsMenuState::new(views::settings::standard_actions())),
-        ..Default::default()
-    };
+    let app = views::App { settings_page: views::settings::SettingsPage::new(), movie_manager: Default::default() };
+    let mut state = views::AppState::default();
     let mut event_reader = EventStream::new();
     let mut tick = time::interval(Duration::from_millis(1000/15));
     tokio::pin!(tick);
@@ -107,6 +106,7 @@ where B: tui::backend::Backend
             msg = receiver.recv() => {
                 if let Some(msg) = msg {
                     use mkube::{AppMessage, AppEvent, views::settings::{SettingsMessage, SettingsEvent}, library::Library};
+                    use mkube::{ views::movie_manager::{MovieManagerEvent, MovieManagerMessage}};
                     match msg {
                         AppMessage::Future(builder) => {
                             if let Some(app_event) = builder(&mut state).await {
@@ -122,11 +122,13 @@ where B: tui::backend::Backend
                         AppMessage::SettingsMessage(SettingsMessage::EditExisting(lib)) => {
                             if let Some((ind, _)) = state.libraries.iter().enumerate().filter(|(_, l)| &&lib == l).next() {
                                 let l = state.libraries.swap_remove(ind);
+                                let _ = state.conns.swap_remove(ind);
                                 state.register_event(AppEvent::SettingsEvent(SettingsEvent::EditExisting(l)));
                             } 
                         },
                         AppMessage::SettingsMessage(SettingsMessage::SaveLibrary(lib)) => {
-                            if let Ok(conn) = MultiFs::try_from(&lib) {
+                            if let Ok(mut conn) = MultiFs::try_from(&lib) {
+                                let _ = conn.as_mut_rfs().connect();
                                 state.conns.push(conn);
                                 state.libraries.push(lib);
                             }
@@ -134,12 +136,31 @@ where B: tui::backend::Backend
                         },
                         AppMessage::SettingsMessage(SettingsMessage::TestLibrary(lib)) => {
                             let rst = if let Ok(mut conn) = MultiFs::try_from(&lib) {
-                                let _ = conn.as_mut_rfs().connect();
                                 (conn.as_mut_rfs().is_connected(), conn.as_mut_rfs().exists(&lib.path.as_path()).unwrap_or(false))
                             } else {
                                 (false, false)
                             };
                             state.register_event(AppEvent::SettingsEvent(SettingsEvent::ConnTestResult(rst)));
+                        },
+                        AppMessage::MovieManagerMessage(MovieManagerMessage::RefreshMovies) => {
+                            state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::ClearMovieList));
+                            for i in 0..state.conns.len() {
+                                let _ = state.conns[i].as_mut_rfs().connect();
+                                if state.conns[i].as_mut_rfs().is_connected() {
+                                    if let Ok(paths) = mkube::analyze_library(&mut state.conns[i], state.libraries[i].path.clone(), 2).await {
+                                        for path in paths {
+                                            let placeholder_title = format!("{}", path.file_name().map(|s| s.to_string_lossy().to_owned()).unwrap_or("Invalid file name.".into()));
+                                            let movie = mkube::try_open_nfo(&mut state.conns[i], path).await.unwrap_or_else(|_| {
+                                                mkube::nfo::Movie {
+                                                    title: placeholder_title,
+                                                    ..Default::default()
+                                                }
+                                            });
+                                            state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::MovieDiscovered(movie)));
+                                        }
+                                    } 
+                                }
+                            }
                         },
                         AppMessage::Close => {
                             break;

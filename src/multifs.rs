@@ -7,10 +7,12 @@ use metadata::MediaFileMetadata;
 use std::io::{Cursor, Read, Seek, Write, BufRead, Result as IoResult, self, SeekFrom};
 use anyhow::{Result, anyhow};
 use remotefs_ftp::client::FtpFs;
+use remotefs_smb::{SmbFs};
 
 pub enum MultiFs {
     Local(LocalFs),
     Ftp(FtpFs),
+    Smb(SmbFs),
 }
 
 impl MultiFs {
@@ -18,6 +20,7 @@ impl MultiFs {
         match self {
             MultiFs::Local(lfs) => lfs,
             MultiFs::Ftp(ftp) => ftp,
+            MultiFs::Smb(smb) => smb,
         }
     }
 

@@ -3,6 +3,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use remotefs_ftp::client::FtpFs;
+use remotefs_smb::{SmbFs, SmbCredentials, SmbOptions};
 
 use crate::multifs::MultiFs;
 use crate::localfs::LocalFs;
@@ -12,6 +13,7 @@ pub enum LibraryType {
     #[default]
     Local,
     Ftp,
+    Smb,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -25,6 +27,7 @@ impl LibraryType {
         match self {
             LibraryType::Local => "file",
             LibraryType::Ftp => "ftp",
+            LibraryType::Smb => "smb",
         }
     }
 }
@@ -66,22 +69,39 @@ impl TryFrom<&Library> for MultiFs {
                 Ok(MultiFs::Local(LocalFs::new(l.path.clone())))
             }, 
             LibraryType::Ftp => {
-                let url = Url::try_from(l)?;
-                if let Some(host) = url.host_str() {
-                    if url.username().len() > 0{
-                        if let Some(password) = url.password() {
-                            let ftpfs = FtpFs::new(host, url.port_or_known_default().unwrap())
-                                .username(url.username())
-                                .password(password);
-                            return Ok(MultiFs::Ftp(ftpfs));
-                        }
-                    } else {
-                        let ftpfs = FtpFs::new(host, url.port_or_known_default().unwrap());
-                        return Ok(MultiFs::Ftp(ftpfs));
+                if let Some(host) = &l.host {
+                    let mut ftpfs = FtpFs::new(host, 21);
+                    if let Some(username) = &l.username {
+                        ftpfs = ftpfs.username(username);
                     }
+                    if let Some(password) = &l.password {
+                        ftpfs = ftpfs.password(password);
+                    }
+                    Ok(MultiFs::Ftp(ftpfs))
+                } else {
+                    Err(())
                 }
-                Err(())
-            }
+            },
+            LibraryType::Smb => {
+                if let Some(host) = &l.host {
+                    let mut crds = SmbCredentials::default()
+                        .server(format!("smb://{}", host));
+                    if let Some(username) = &l.username {
+                        crds = crds.username(username);
+                    }
+                    if let Some(password) = &l.password {
+                        crds = crds.password(password);
+                    }
+                    let opts = SmbOptions::default()
+                        .case_sensitive(true)
+                        .one_share_per_server(true);
+                    SmbFs::try_new(crds, opts)
+                        .map(|smb| MultiFs::Smb(smb))
+                        .map_err(|_| {})
+                } else {
+                    Err(())
+                }
+            },
         }
     }
 }

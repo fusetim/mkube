@@ -20,6 +20,7 @@ serde = { version = "1", features = ["derive"] }
 async-recursion = "1.0.4"
 ffmpeg-next = "6"
 remotefs-ftp = { version = "0.1", features = ["secure"] }
+remotefs-smb = "^0.2.0"
 urlencoding = "2"
 futures-util = "0.3"
 unicode-width = "^0.1"

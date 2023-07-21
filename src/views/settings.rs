@@ -46,7 +46,7 @@ pub enum SettingsMessage {
 
 impl Default for SettingsState {
     fn default() -> SettingsState {
-        SettingsState::Menu(SettingsMenuState::default())
+        SettingsState::Menu(SettingsMenuState::new(standard_actions()))
     }
 }
 
@@ -216,7 +216,9 @@ impl SettingsMenuState {
                             MenuItemType::NewFtpLibrary => {
                                 sender.send(AppMessage::TriggerEvent(AppEvent::SettingsEvent(SettingsEvent::EditNew(LibraryType::Ftp)))).unwrap();
                             },
-                            MenuItemType::NewSmbLibrary => { unimplemented!(); },
+                            MenuItemType::NewSmbLibrary => { 
+                                sender.send(AppMessage::TriggerEvent(AppEvent::SettingsEvent(SettingsEvent::EditNew(LibraryType::Smb)))).unwrap();
+                            },
                             MenuItemType::ExistingLibrary(l) => {
                                 sender.send(AppMessage::SettingsMessage(SettingsMessage::EditExisting(l.clone()))).unwrap();
                             },

@@ -1,7 +1,7 @@
 use serde::{Serialize, Deserialize};
 
 #[serde(rename = "movie")]
-#[derive(Deserialize, Serialize, PartialEq, Debug)]
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone, Default)]
 pub struct Movie {
     pub title: String,
     #[serde(skip_serializing_if = "Option::is_none")] 
@@ -50,7 +50,7 @@ pub struct Movie {
     pub source: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Debug)]
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone, Default)]
 pub struct UniqueId {
     #[serde(rename = "@type")]
     pub id_type: String,
@@ -60,7 +60,7 @@ pub struct UniqueId {
     pub value: String,
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Debug)]
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone, Default)]
 pub struct Actor {
     pub name: String,
     #[serde(default)]
@@ -73,7 +73,7 @@ pub struct Actor {
     pub thumb: Option<Thumb>,
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Debug)]
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone, Default)]
 pub struct CrewPerson {
     pub name: String,
     #[serde(rename = "@tmdbid")]
@@ -83,7 +83,7 @@ pub struct CrewPerson {
     pub thumb: Option<Thumb>,
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Debug)]
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone, Default)]
 pub struct Thumb {
     #[serde(rename = "@aspect")]
     #[serde(skip_serializing_if = "Option::is_none")] 
@@ -92,12 +92,12 @@ pub struct Thumb {
     pub path: String,
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Debug)]
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone, Default)]
 pub struct FileInfo { 
     pub streamdetails: StreamDetails,
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Debug)]
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone, Default)]
 pub struct StreamDetails { 
     #[serde(default)]
     #[serde(skip_serializing_if = "Vec::is_empty")] 
@@ -110,7 +110,7 @@ pub struct StreamDetails {
     pub subtitle: Vec<SubtitleTrack>,
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Debug)]
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone, Default)]
 pub struct VideoTrack { 
     pub codec: String,
     #[serde(skip_serializing_if = "Option::is_none")] 
@@ -129,7 +129,7 @@ pub struct VideoTrack {
     pub hdr_type: Option<String>,
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Debug)]
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone, Default)]
 pub struct AudioTrack { 
     pub codec: String,
     #[serde(skip_serializing_if = "Option::is_none")] 
@@ -138,7 +138,7 @@ pub struct AudioTrack {
     pub channels: Option<u64>,
 }
 
-#[derive(Deserialize, Serialize, PartialEq, Debug)]
+#[derive(Deserialize, Serialize, PartialEq, Debug, Clone, Default)]
 pub struct SubtitleTrack { 
     #[serde(skip_serializing_if = "Option::is_none")] 
     pub codec: Option<String>,

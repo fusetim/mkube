@@ -65,14 +65,14 @@ where U: Into<&'a str> + Clone {
 }
 
 #[async_recursion(?Send)]
-async fn analyze_library(lfs: &mut MultiFs, path: PathBuf, depth: usize) -> Result<Vec<PathBuf>> {
+pub async fn analyze_library(lfs: &mut MultiFs, path: PathBuf, depth: usize) -> Result<Vec<PathBuf>> {
     //let mut dir = read_dir(&path).await.map_err(|err| anyhow!("Failed to open directory {}, causes:\n{:?}", &path.display(), err))?;
     let mut dir = lfs.as_mut_rfs().list_dir(&path).map_err(|err| anyhow!("Failed to open directory {}, causes:\n{:?}", &path.display(), err))?;
     let mut video_paths = Vec::new();
     for entry in dir {
         if entry.metadata().file_type.is_file() {
             if entry.path().extension().is_some() && VIDEO_EXTENSIONS.contains(&entry.path().extension().unwrap().to_string_lossy().as_ref()) {
-                println!("Found {}!", entry.path().display());
+                //println!("Found {}!", entry.path().display());
                 video_paths.push(entry.path().to_owned());
             } else {
                 //println!("Ignored {} (not a video container)!", entry.path().display());
@@ -86,13 +86,13 @@ async fn analyze_library(lfs: &mut MultiFs, path: PathBuf, depth: usize) -> Resu
                 video_paths.extend(sub);
             }
         } else {
-            println!("Ignoring entry {} (symlink).", entry.path().display());
+            //println!("Ignoring entry {} (symlink).", entry.path().display());
         }
     }
     Ok(video_paths)
 }
 
-async fn try_open_nfo(lfs: &mut MultiFs, mut path: PathBuf) -> Result<nfo::Movie> {
+pub async fn try_open_nfo(lfs: &mut MultiFs, mut path: PathBuf) -> Result<nfo::Movie> {
     let mut oc = OwnedCursor::new();
     let cursor = Box::new(oc.clone());
     if path.set_extension("nfo") {
