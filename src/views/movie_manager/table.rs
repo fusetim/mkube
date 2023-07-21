@@ -77,11 +77,19 @@ impl MovieTableState {
                     let sender = MESSAGE_SENDER.get().unwrap();
                     sender.send(AppMessage::MovieManagerMessage(MovieManagerMessage::RefreshMovies)).unwrap();
                     self.is_loading = true;
-                    return true;
+                    true
+                } else if kev.code == KeyCode::Up && self.movies.len() > 0 {
+                    self.table_state.select(self.table_state.selected().map(|c| (c + self.movies.len() - 1) % self.movies.len()));
+                    true
+                } else if kev.code == KeyCode::Down && self.movies.len() > 0 {
+                    self.table_state.select(self.table_state.selected().map(|c| (c + 1) % self.movies.len()).or(Some(0)));
+                    true
+                } else {
+                    false
                 }
-                false
             },
             AppEvent::MovieManagerEvent(MovieManagerEvent::ClearMovieList) => {
+                self.table_state.select(None);
                 self.movies.clear();
                 true
             },
