@@ -108,7 +108,9 @@ impl MovieSearchState {
                         sender.send(AppMessage::MovieManagerMessage(MovieManagerMessage::SearchTitle(self.query_state.get_value().to_owned()))).unwrap();
                         true
                     } else if self.selected == 2 {
-                        // TODO: Apply suggestion
+                        /*let sender = MESSAGE_SENDER.get().unwrap();
+                        sender.send(AppMessage::MovieManagerMessage(MovieManagerMessage::SaveNfo((nfo, self.movie_path.clone())))).unwrap();
+                        */
                         true
                     } else {
                         false

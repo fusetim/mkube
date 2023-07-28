@@ -18,11 +18,12 @@ use crate::{AppEvent, AppState, AppMessage};
 #[derive(Clone, Debug, Default)]
 pub struct MovieManager {
     table: MovieTable,
+    search: MovieSearch,
 }
 #[derive(Clone, Debug)]
 pub enum MovieManagerState {
     Table(MovieTableState),
-    Search(MovieSearch),
+    Search(MovieSearchState),
 }
 
 impl Default for MovieManagerState {
@@ -60,6 +61,10 @@ impl StatefulWidget for MovieManager {
                 block = block.title(" Movies ");
                 StatefulWidget::render(self.table, inner, buf, state);
             },
+            MovieManagerState::Search(ref mut state) => {
+                block = block.title(" Search ");
+                StatefulWidget::render(self.search, inner, buf, state);
+            },
             _ => { },
         }
         Widget::render(block, area, buf);
@@ -70,7 +75,19 @@ impl MovieManagerState {
     pub fn input(&mut self, app_event: AppEvent) -> bool {
         match self {
             MovieManagerState::Table(ref mut state) => {
-                state.input(app_event)
+                match app_event {
+                    AppEvent::MovieManagerEvent(MovieManagerEvent::SearchMovie((movie, path))) => {
+                        let mut query_state = InputState::default();
+                        query_state.set_value(&movie.title);
+                        let new_state = MovieSearchState {
+                            movie_path: path,
+                            query_state,
+                            ..Default::default()
+                        };
+                        *self = MovieManagerState::Search(new_state);
+                    }
+                    _ => state.input(app_event),
+                }
             },
             _ => { false },
         }

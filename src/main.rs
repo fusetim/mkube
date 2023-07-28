@@ -65,6 +65,7 @@ async fn run<B>(terminal: &mut Terminal<B>) -> Result<()>
 where B: tui::backend::Backend
 {
     let (sender, mut receiver) = unbounded_channel();
+    let tmdb_client = TmdbClient::new("74a673b58f22dd90b8ac750b62e00b0b".into());
     mkube::MESSAGE_SENDER.set(sender).map_err(|err| anyhow!("Failed to init MESSAGE_SENDER, causes:\n{:?}", err))?;
     let app = views::App { settings_page: views::settings::SettingsPage::new(), movie_manager: Default::default() };
     let mut state = views::AppState::default();
@@ -163,8 +164,12 @@ where B: tui::backend::Backend
                             }
                         },
                         AppMessage::MovieManagerMessage(MovieManagerMessage::SearchTitle(title)) => {
-                            // TODO
-                            unimplemented!()
+                            let ms = MovieSearch::new(title);
+                            if let Some(results) = ms.execute(&tmdb_client).await {
+                                state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::SearchResults(results.results)));
+                            } else {
+                                // TODO
+                            }
                         },
                         AppMessage::MovieManagerMessage(MovieManagerMessage::SaveNfo((nfo, path))) => {
                             // TODO

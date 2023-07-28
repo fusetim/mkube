@@ -76,6 +76,7 @@
             pkgs.ffmpeg.lib
             pkgs.llvmPackages_latest.libclang
             pkgs.rustPlatform.bindgenHook
+            pkgs.openssl
           ];
         });
       in
@@ -156,6 +157,7 @@
             pkgs.llvmPackages_latest.libclang
             pkgs.llvmPackages_latest.bintools
             pkgs.clang_16
+            pkgs.openssl
           ];
 
           LIBCLANG_PATH = "${pkgs.llvmPackages_latest.libclang.lib}/lib";
