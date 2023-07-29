@@ -10,7 +10,7 @@
     };
 
     fenix = {
-      url = "github:nix-community/fenix";
+      url = "github:nix-community/fenix/monthly";
       inputs.nixpkgs.follows = "nixpkgs";
       inputs.rust-analyzer-src.follows = "";
     };
@@ -21,16 +21,25 @@
       url = "github:rustsec/advisory-db";
       flake = false;
     };
+
   };
 
   outputs = { self, nixpkgs, crane, fenix, flake-utils, advisory-db, ... }:
     flake-utils.lib.eachDefaultSystem (system:
+      let 
+        toolchain = (fenix.packages.${system}.toolchainOf {
+            channel = "nightly";
+            date = "2023-07-27";
+            sha256 = "1bUA3mqH455LncZMMH1oEBFLWu5TOluJeDZ8iwAsBGs=";
+          });
+      in
       let
         pkgs = import nixpkgs {
           inherit system;
         };
 
         inherit (pkgs) lib;
+        inherit toolchain;
 
         craneLib = crane.lib.${system};
         src = craneLib.cleanCargoSource (craneLib.path ./.);
@@ -52,8 +61,7 @@
           # MY_CUSTOM_VAR = "some value";
         };
 
-        craneLibLLvmTools = craneLib.overrideToolchain
-          (fenix.packages.${system}.complete.withComponents [
+        craneLibLLvmTools = craneLib.overrideToolchain (toolchain.withComponents [
             "cargo"
             "llvm-tools"
             "rustc"
@@ -77,6 +85,8 @@
             pkgs.llvmPackages_latest.libclang
             pkgs.rustPlatform.bindgenHook
             pkgs.openssl
+            pkgs.samba
+            pkgs.samba.dev
           ];
         });
       in
@@ -145,8 +155,10 @@
 
           # Extra inputs can be added here
           nativeBuildInputs = with pkgs; [
-            cargo
-            rustc
+            (toolchain.withComponents [
+              "cargo"
+              "rustc"
+            ])
             pkg-config
           ];
 
@@ -158,6 +170,8 @@
             pkgs.llvmPackages_latest.bintools
             pkgs.clang_16
             pkgs.openssl
+            pkgs.samba
+            pkgs.samba.dev
           ];
 
           LIBCLANG_PATH = "${pkgs.llvmPackages_latest.libclang.lib}/lib";
@@ -167,6 +181,7 @@
                 # add dev libraries here (e.g. pkgs.libvmi.dev)
                 pkgs.glibc.dev 
                 pkgs.ffmpeg.dev
+                pkgs.samba.dev
               ])
               # Includes with special directory paths
               ++ [

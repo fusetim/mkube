@@ -17,7 +17,7 @@ pub struct MovieTable {}
 #[derive(Clone, Debug, Default)]
 pub struct MovieTableState {
     table_state: TableState,
-    movies: Vec<(Movie, PathBuf)>,
+    movies: Vec<(Movie, usize, PathBuf)>,
     is_loading: bool,
 }
 
@@ -35,7 +35,7 @@ impl StatefulWidget for MovieTable {
         }
 
         let rows : Vec<_> = state.movies.iter()
-            .map(|(m, _)| {
+            .map(|(m, _, _)| {
                 let title = m.title.clone();
                 let year = m.premiered.as_deref().unwrap_or("".into());
                 let source = m.source.as_deref().unwrap_or("".into());
@@ -63,7 +63,7 @@ impl MovieTableState {
     pub fn input(&mut self, app_event: AppEvent) -> bool {
         match app_event {
             AppEvent::KeyEvent(kev) => {
-                if kev.code == KeyCode::Char('R') && kev.modifiers == (KeyModifiers::SHIFT | KeyModifiers::CONTROL) && (!self.is_loading) {
+                if kev.code == KeyCode::Char('r') && (!self.is_loading) {
                     let sender = MESSAGE_SENDER.get().unwrap();
                     sender.send(AppMessage::MovieManagerMessage(MovieManagerMessage::RefreshMovies)).unwrap();
                     self.is_loading = true;
@@ -96,12 +96,12 @@ impl MovieTableState {
                 self.movies.push(movie);
                 true
             },
-            AppEvent::MovieManagerEvent(MovieManagerEvent::MovieUpdated((movie, path))) => {
+            AppEvent::MovieManagerEvent(MovieManagerEvent::MovieUpdated((movie, fs_id, path))) => {
                 self.is_loading = false;
-                if let Some((ind, _)) = self.movies.iter().enumerate().filter(|(_, (_,p))| p == &path).next() {
-                    self.movies[ind] = (movie, path);
+                if let Some((ind, _)) = self.movies.iter().enumerate().filter(|(_, (_,fi,p))| p == &path && fi == &fs_id).next() {
+                    self.movies[ind] = (movie, fs_id, path);
                 } else {
-                    self.movies.push((movie, path));
+                    self.movies.push((movie, fs_id, path));
                 }
                 true
             },

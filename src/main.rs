@@ -157,23 +157,37 @@ where B: tui::backend::Backend
                                                     ..Default::default()
                                                 }
                                             });
-                                            state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::MovieDiscovered((movie, path))));
+                                            state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::MovieDiscovered((movie, i, path))));
                                         }
                                     } 
                                 }
                             }
                         },
                         AppMessage::MovieManagerMessage(MovieManagerMessage::SearchTitle(title)) => {
+                            use tmdb_api::movie::search::MovieSearch;
+                            use tmdb_api::prelude::Command;
                             let ms = MovieSearch::new(title);
-                            if let Some(results) = ms.execute(&tmdb_client).await {
+                            if let Ok(results) = ms.execute(&tmdb_client).await {
                                 state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::SearchResults(results.results)));
                             } else {
                                 // TODO
                             }
                         },
-                        AppMessage::MovieManagerMessage(MovieManagerMessage::SaveNfo((nfo, path))) => {
-                            // TODO
-                            unimplemented!()
+                        AppMessage::MovieManagerMessage(MovieManagerMessage::SaveNfo((id, fs_id, mut path))) => {
+                            use std::io::Cursor;
+                            use std::io::Seek;
+                            let mut movie_nfo = mkube::transform_as_nfo(&tmdb_client, id, Some("fr".to_owned())).await?;
+                            let mt = mkube::get_metadata(&mut state.conns[fs_id], (&state.libraries[fs_id]).try_into().expect("Cannot get a baseURL from library."), path.clone()).await?;
+                            movie_nfo.fileinfo = Some(mt);
+                            let nfo_string = quick_xml::se::to_string(&movie_nfo).expect("Failed to produce a valid nfo file.");
+
+                            path.set_extension("nfo");
+                            let mut buf = Cursor::new(Vec::new());
+                            buf.write_all(br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>"#).await?;
+                            buf.write_all(nfo_string.as_bytes()).await?;
+                            let _ = buf.rewind();
+                            let _ = state.conns[fs_id].as_mut_rfs().create_file(&path, &Metadata::default(), Box::new(buf))
+                                .map_err(|err| anyhow!("Can't open the nfo file., causes:\n{:?}", err))?;
                         },
                         AppMessage::Close => {
                             break;

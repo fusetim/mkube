@@ -113,7 +113,7 @@ pub async fn try_open_nfo(lfs: &mut MultiFs, mut path: PathBuf) -> Result<nfo::M
     Err(anyhow!("No nfo available."))
 }
 
-async fn get_metadata(lfs: &mut MultiFs, base_url: Url, path: PathBuf) -> Result<nfo::FileInfo> {
+pub async fn get_metadata(lfs: &mut MultiFs, base_url: Url, path: PathBuf) -> Result<nfo::FileInfo> {
     use metadata::media_file::MediaFileMetadata;
     use metadata::stream::StreamMetadata;
 
@@ -165,7 +165,7 @@ async fn get_metadata(lfs: &mut MultiFs, base_url: Url, path: PathBuf) -> Result
     })
 }
 
-async fn transform_as_nfo(client: &TmdbClient, tmdb_id: u64, lang: Option<String>) -> Result<nfo::Movie> {
+pub async fn transform_as_nfo(client: &TmdbClient, tmdb_id: u64, lang: Option<String>) -> Result<nfo::Movie> {
     let mdr = MovieDetails::new(tmdb_id).with_language(lang.clone());
     let md = mdr.execute(&client).await
         .map_err(|err| anyhow!("Failed to get movie details (id: {}), causes:\n{:?}", tmdb_id, err))?;

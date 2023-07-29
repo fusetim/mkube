@@ -6,6 +6,8 @@ use tui::{
 };
 
 use std::path::PathBuf;
+use crossterm::event::KeyCode;
+
 
 pub mod details;
 pub mod table;
@@ -14,6 +16,7 @@ pub mod search;
 use table::{MovieTable, MovieTableState};
 use search::{MovieSearch, MovieSearchState};
 use crate::{AppEvent, AppState, AppMessage};
+use crate::views::widgets::{Input, InputState};
 
 #[derive(Clone, Debug, Default)]
 pub struct MovieManager {
@@ -35,16 +38,16 @@ impl Default for MovieManagerState {
 #[derive(Clone, Debug, PartialEq)]
 pub enum MovieManagerEvent {
     ClearMovieList,
-    MovieDiscovered((crate::nfo::Movie, PathBuf)),
-    MovieUpdated((crate::nfo::Movie, PathBuf)),
-    SearchMovie((crate::nfo::Movie, PathBuf)),
+    MovieDiscovered((crate::nfo::Movie, usize, PathBuf)),
+    MovieUpdated((crate::nfo::Movie, usize, PathBuf)),
+    SearchMovie((crate::nfo::Movie, usize, PathBuf)),
     SearchResults(Vec<tmdb_api::movie::MovieShort>),
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum MovieManagerMessage {
     RefreshMovies,
     SearchTitle(String),
-    SaveNfo((crate::nfo::Movie, PathBuf)),
+    SaveNfo((u64, usize, PathBuf)), // tmdb_id, movie_path
 }
 
 impl StatefulWidget for MovieManager {
@@ -76,17 +79,31 @@ impl MovieManagerState {
         match self {
             MovieManagerState::Table(ref mut state) => {
                 match app_event {
-                    AppEvent::MovieManagerEvent(MovieManagerEvent::SearchMovie((movie, path))) => {
+                    AppEvent::MovieManagerEvent(MovieManagerEvent::SearchMovie((movie, fs_id, path))) => {
                         let mut query_state = InputState::default();
                         query_state.set_value(&movie.title);
                         let new_state = MovieSearchState {
                             movie_path: path,
+                            movie_fs_id: fs_id,
                             query_state,
                             ..Default::default()
                         };
                         *self = MovieManagerState::Search(new_state);
+                        true
                     }
                     _ => state.input(app_event),
+                }
+            },
+            MovieManagerState::Search(ref mut state) => {
+                if let AppEvent::KeyEvent(kev) = app_event {
+                    if kev.code == KeyCode::Esc {
+                        *self = Default::default();
+                        true
+                    } else {
+                        state.input(app_event)
+                    }
+                } else {
+                    state.input(app_event)
                 }
             },
             _ => { false },
