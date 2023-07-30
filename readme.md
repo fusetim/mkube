@@ -7,8 +7,8 @@ MKube aims to be a complete media manager in your terminal.
 ## State of development
 
 Currently MKube is at most a PoC, and a lot of changes awaits it. 
-Nonetheless, here a small list of the features, MKube is expected to provide
-today or in the future.
+Nonetheless, here a small list of features, MKube is expected to provide
+today or in the future :
 
 - [x] Local libraries
 - [x] Remote libraries (currently supporting FTP & SMB)
@@ -29,7 +29,7 @@ multiple arch).
 
 ### Using Rust
 
-At the moment, MKube does not inplement any condition features, therefore you 
+At the moment, MKube does not inplement any conditional features, therefore you 
 will need to install every system dependencies required by Mkube and its dependencies.
 This includes (but might not be limited to):
 - ffmpeg(-dev)
@@ -52,7 +52,7 @@ adapted to rust development.
 
 ## Licencing
 
-***To Be Done***
-*If needed, please contact me. I have not figure this out for the moment but certainly will licence this software as GPLv3*
+***To Be Done:*** *If needed, please contact me. I have not figure this out for the moment but 
+certainly will licence this software as GPLv3*
 
 Fusetim (2023) - All rights reserved.
