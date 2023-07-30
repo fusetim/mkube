@@ -51,7 +51,18 @@
           nativeBuildInputs = [pkgs.pkg-config];
 
           buildInputs = [
-            # Add additional build inputs here
+            (toolchain.withComponents [
+              "cargo"
+              "rustc"
+            ])
+            pkgs.ffmpeg
+            pkgs.ffmpeg.dev
+            pkgs.ffmpeg.lib
+            pkgs.llvmPackages_latest.libclang
+            pkgs.rustPlatform.bindgenHook
+            pkgs.openssl
+            pkgs.samba
+            pkgs.samba.dev
           ] ++ lib.optionals pkgs.stdenv.isDarwin [
             # Additional darwin specific inputs can be set here
             pkgs.libiconv
@@ -78,16 +89,7 @@
 
           nativeBuildInputs = [ pkgs.pkg-config ];
 
-          buildInputs = commonArgs.buildInputs ++ [
-            pkgs.ffmpeg
-            pkgs.ffmpeg.dev
-            pkgs.ffmpeg.lib
-            pkgs.llvmPackages_latest.libclang
-            pkgs.rustPlatform.bindgenHook
-            pkgs.openssl
-            pkgs.samba
-            pkgs.samba.dev
-          ];
+          buildInputs = commonArgs.buildInputs ++ [];
         });
       in
       {
