@@ -2,11 +2,11 @@
 
 *Yet another media manager, but better (?).*
 
-MKube aims to be a complete media manager in your terminal. 
+MKube aims to be a complete (and free) media manager in your terminal. 
 
 ## State of development
 
-Currently MKube is at most a PoC, and a lot of changes awaits it. 
+Currently MKube is at most a PoC, and lots of changes await it. 
 Nonetheless, here a small list of features, MKube is expected to provide
 today or in the future :
 
@@ -26,7 +26,16 @@ today or in the future :
 MKube is written in Rust and currently built using Nix (to allow easy build on 
 multiple arch).
 
-### Using Rust
+### Supported platforms
+
+Until a first release, MKube will not be tested on any other machine than mine,
+moreover the `main` branch might break from time to time. 
+
+My long term strategy is to support mainly Linux platforms (`amd64`, `arm64`).  
+MacOS might work (as dependencies at least exist there) but it will not be tested.  
+I am unsure if Windows will get supported one day, even partially.
+
+### Using Cargo
 
 MKube currently requires the following dependencies (but it might not be limited to these):
 - ffmpeg(-dev)
@@ -40,16 +49,22 @@ At the time of writting, MKube targets Rust `nightly-2023-07-27`.
 
 ### Using Nix
 
-MKube use Nix Flakes to describe its build steps, therefore you might need to 
+MKube uses Nix Flakes to describe its build steps, therefore you might need to 
 enable flakes (experimental-features) before building MKube using 
 `nix build`.
 
 Note: For developement, you should prefer to run `nix develop` to create a shell 
 adapted to rust development.
 
+## Inspirations
+The Linux community is lacking a good media manager, that can support remote libraries.
+Some good media managers exist, like [tinyMediaManager](https://tinymediamanager.org) but 
+lack features or enforce to buy premium version to access all their features, including 
+some essential ones. MKube is an attempt to resolve this issue I had myself.
+
 ## Licencing
 
-***To Be Done:*** *If needed, please contact me. I have not figure this out for the moment but 
+***To Be Done:*** *If needed, please contact me. I have not figured this out for the moment but 
 certainly will licence this software as GPLv3*
 
 Fusetim (2023) - All rights reserved.
