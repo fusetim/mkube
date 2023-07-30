@@ -213,9 +213,11 @@ impl SettingsMenuState {
                             MenuItemType::NewLocalLibrary => {
                                 sender.send(AppMessage::TriggerEvent(AppEvent::SettingsEvent(SettingsEvent::EditNew(LibraryType::Local)))).unwrap();
                             },
+                            #[cfg(feature = "ftp")]
                             MenuItemType::NewFtpLibrary => {
                                 sender.send(AppMessage::TriggerEvent(AppEvent::SettingsEvent(SettingsEvent::EditNew(LibraryType::Ftp)))).unwrap();
                             },
+                            #[cfg(feature = "smb")]
                             MenuItemType::NewSmbLibrary => { 
                                 sender.send(AppMessage::TriggerEvent(AppEvent::SettingsEvent(SettingsEvent::EditNew(LibraryType::Smb)))).unwrap();
                             },
@@ -303,7 +305,9 @@ impl MenuItem {
 pub fn standard_actions() -> Vec<MenuItem> {
     let mut items = Vec::new();
     items.push(MenuItem::new("Add a local library").set_type(MenuItemType::NewLocalLibrary));
+    #[cfg(feature = "ftp")]
     items.push(MenuItem::new("Add a FTP library").set_type(MenuItemType::NewFtpLibrary));
+    #[cfg(feature = "smb")]
     items.push(MenuItem::new("Add a SMB library").set_type(MenuItemType::NewSmbLibrary));
     items.push(MenuItem::new(" - Existing libraries -").set_type(MenuItemType::None).selectable(false));
     items
@@ -314,7 +318,9 @@ pub enum MenuItemType {
     #[default]
     None,
     NewLocalLibrary,
+    #[cfg(feature = "smb")]
     NewSmbLibrary,
+    #[cfg(feature = "ftp")]
     NewFtpLibrary,
     ExistingLibrary(Library),
 }

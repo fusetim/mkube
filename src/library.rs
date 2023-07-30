@@ -2,7 +2,9 @@ use url::Url;
 use std::path::PathBuf;
 use std::str::FromStr;
 
+#[cfg(feature = "ftp")]
 use remotefs_ftp::client::FtpFs;
+#[cfg(feature = "smb")]
 use remotefs_smb::{SmbFs, SmbCredentials, SmbOptions};
 
 use crate::multifs::MultiFs;
@@ -12,7 +14,9 @@ use crate::localfs::LocalFs;
 pub enum LibraryType {
     #[default]
     Local,
+    #[cfg(feature = "ftp")]
     Ftp,
+    #[cfg(feature = "smb")]
     Smb,
 }
 
@@ -26,7 +30,9 @@ impl LibraryType {
     pub fn to_scheme(&self) -> &'static str {
         match self {
             LibraryType::Local => "file",
+            #[cfg(feature = "ftp")]
             LibraryType::Ftp => "ftp",
+            #[cfg(feature = "smb")]
             LibraryType::Smb => "smb",
         }
     }
@@ -68,6 +74,7 @@ impl TryFrom<&Library> for MultiFs {
             LibraryType::Local => {
                 Ok(MultiFs::Local(LocalFs::new(l.path.clone())))
             }, 
+            #[cfg(feature = "ftp")]
             LibraryType::Ftp => {
                 if let Some(host) = &l.host {
                     let mut ftpfs = FtpFs::new(host, 21);
@@ -82,6 +89,7 @@ impl TryFrom<&Library> for MultiFs {
                     Err(())
                 }
             },
+            #[cfg(feature = "smb")]
             LibraryType::Smb => {
                 if let Some(host) = &l.host {
                     let mut crds = SmbCredentials::default()

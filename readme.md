@@ -20,7 +20,6 @@ today or in the future :
 - [ ] Artwork retrievals
 - [ ] TV Show support
 - [ ] Persistent configuration
-- [ ] Conditional features
 
 ## Build & Run
 
@@ -29,11 +28,9 @@ multiple arch).
 
 ### Using Rust
 
-At the moment, MKube does not inplement any conditional features, therefore you 
-will need to install every system dependencies required by Mkube and its dependencies.
-This includes (but might not be limited to):
+MKube currently requires the following dependencies (but it might not be limited to these):
 - ffmpeg(-dev)
-- libsmbclient
+- libsmbclient (`smb` feature, *enabled by default*)
 - openssl
 
 Then, just build it: `cargo build --release`

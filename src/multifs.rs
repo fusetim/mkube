@@ -6,12 +6,16 @@ use std::str::FromStr;
 use metadata::MediaFileMetadata;
 use std::io::{Cursor, Read, Seek, Write, BufRead, Result as IoResult, self, SeekFrom};
 use anyhow::{Result, anyhow};
+#[cfg(feature = "ftp")]
 use remotefs_ftp::client::FtpFs;
+#[cfg(feature = "smb")]
 use remotefs_smb::{SmbFs};
 
 pub enum MultiFs {
     Local(LocalFs),
+    #[cfg(feature = "ftp")]
     Ftp(FtpFs),
+    #[cfg(feature = "smb")]
     Smb(SmbFs),
 }
 
@@ -19,7 +23,9 @@ impl MultiFs {
     pub fn as_mut_rfs(&mut self) -> &mut dyn RemoteFs {
         match self {
             MultiFs::Local(lfs) => lfs,
+            #[cfg(feature = "ftp")]
             MultiFs::Ftp(ftp) => ftp,
+            #[cfg(feature = "smb")]
             MultiFs::Smb(smb) => smb,
         }
     }

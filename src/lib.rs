@@ -21,7 +21,6 @@ use tokio::io::{AsyncWriteExt,AsyncReadExt};
 use tokio::sync::mpsc::{UnboundedSender};
 use async_recursion::async_recursion;
 use url::Url;
-use remotefs_ftp::client::FtpFs;
 use tui::{
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Direction, Layout},
