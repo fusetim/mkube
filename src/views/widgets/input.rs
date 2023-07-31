@@ -33,7 +33,7 @@ impl Default for Input {
 
 #[derive(Clone, Debug, Default)]
 pub struct InputState {
-    value: String,
+    value: Vec<String>,
     focused: bool,
     disabled: bool,
     cursor: usize,
@@ -43,35 +43,18 @@ impl InputState {
     pub fn input(&mut self, kev: KeyEvent) -> bool {
         match kev.code {
             KeyCode::Char(c) => {
-                let mut gs = self.value.graphemes(false);
-                let (prev, follow) : (Vec<_>, Vec<_>) = gs.into_iter().enumerate().partition(|(i, _)| i < &self.cursor);
-                let prev = prev.into_iter().fold(String::new(), |acc, (_, c)| format!("{}{}", acc, c));
-                let follow = follow.into_iter().fold(String::new(), |acc, (_, c)| format!("{}{}", acc, c));
-                self.value = format!("{}{}{}", prev, c, follow);
+                self.value.insert(self.cursor, format!("{c}"));
                 self.cursor += 1;
             },
             KeyCode::Backspace => {
                 if self.cursor > 0 {
-                    let mut gs = self.value.graphemes(false);
-                    if self.cursor == self.value.len() {
-                        gs.next_back();
-                        self.value = gs.as_str().to_owned();
-                    } else {
-                        let (prev, follow) : (Vec<_>, Vec<_>) = gs.into_iter().enumerate().partition(|(i, _)| i < &(self.cursor-1));
-                        let prev = prev.into_iter().fold(String::new(), |acc, (_, c)| format!("{}{}", acc, c));
-                        let follow = follow.into_iter().skip(1).fold(String::new(), |acc, (_, c)| format!("{}{}", acc, c));
-                        self.value = format!("{}{}", prev, follow);
-                    }
+                    self.value.remove(self.cursor-1);
                     self.cursor -= 1;
                 }
             },
             KeyCode::Delete => {
                 if self.cursor < self.value.len() {
-                    let mut gs = self.value.graphemes(false);
-                    let (prev, follow) : (Vec<_>, Vec<_>) = gs.into_iter().enumerate().partition(|(i, _)| i < &self.cursor);
-                    let prev = prev.into_iter().fold(String::new(), |acc, (_, c)| format!("{}{}", acc, c));
-                    let follow = follow.into_iter().skip(1).fold(String::new(), |acc, (_, c)| format!("{}{}", acc, c));
-                    self.value = format!("{}{}", prev, follow);
+                    self.value.remove(self.cursor);
                 }
             },
             KeyCode::Left => {
@@ -108,11 +91,11 @@ impl InputState {
     }
 
     pub fn set_value<T: Into<String>>(&mut self, val: T) {
-        self.value = val.into();
+        self.value = val.into().graphemes(false).into_iter().map(|s| s.to_owned()).collect();
     }
 
-    pub fn get_value<'a>(&'a self) -> &'a str {
-        &self.value
+    pub fn get_value<'a>(&'a self) -> String {
+        String::from_iter(self.value.iter().map(|s| s.as_str()))
     }
 }
 
@@ -156,19 +139,18 @@ impl StatefulWidget for Input {
                         .style(style.patch(self.placeholder_style.clone()))
                         .wrap(Wrap { trim: true })
                 } else {
-                    Paragraph::new(Text::raw(&state.value))
+                    Paragraph::new(Text::raw(state.get_value()))
                         .style(style)
                 }
             } else {
-                let len = state.value.graphemes(false).count();
                 let width = area.width as usize;
                 let text_col = state.cursor / width;
                 let text_start = (text_col * width).saturating_sub(10);
                 let cursor_pos = state.cursor - text_start;
                 let text_end = Ord::min(text_start + (width as usize), state.value.len());
-                let content : Vec<_> = state.value.graphemes(false).into_iter().skip(text_start).take(text_end.saturating_sub(text_start)).collect();
+                let content : Vec<_> = state.value.iter().skip(text_start).take(text_end.saturating_sub(text_start)).map(|s| s.as_str()).collect();
                 if state.focused {
-                    if len <= state.cursor {
+                    if state.value.len() <= state.cursor {
                         Paragraph::new(Spans::from(vec![
                             Span::raw(String::from_iter(content)),
                             Span::styled(tui::symbols::block::FULL, Style::default().bg(Color::Red)),
@@ -176,7 +158,7 @@ impl StatefulWidget for Input {
                     } else {
                         Paragraph::new(Spans::from(vec![
                             Span::raw(String::from_iter(content[..(cursor_pos)].to_owned())),
-                            Span::styled(content[cursor_pos], Style::default().bg(Color::White)),
+                            Span::styled(content[cursor_pos], Style::default().fg(Color::Black).bg(Color::White)),
                             Span::raw(String::from_iter(content[(cursor_pos+1)..].to_owned())),
                         ])).style(style)
                     }

@@ -77,7 +77,7 @@ impl LabelledInputState {
         self.input_state.set_value(val);
     }
 
-    pub fn get_value<'a>(&'a self) -> &'a str {
+    pub fn get_value<'a>(&'a self) -> String {
         self.input_state.get_value()
     }
 }
