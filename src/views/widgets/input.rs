@@ -21,9 +21,9 @@ pub struct Input {
 impl Default for Input {
     fn default() -> Input {
         Input {
-            style: Style::default().bg(Color::Gray),
-            focus_style: Style::default().bg(Color::LightRed),
-            disable_style: Style::default().add_modifier(Modifier::UNDERLINED),
+            style: Style::default().fg(Color::Black).bg(Color::Gray),
+            focus_style: Style::default().fg(Color::White).bg(Color::LightRed),
+            disable_style: Style::default().fg(Color::Black).add_modifier(Modifier::UNDERLINED),
             placeholder: None,
             placeholder_style: Style::default().add_modifier(Modifier::ITALIC),
             horiz_constraint: Constraint::Percentage(100),

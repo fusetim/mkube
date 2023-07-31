@@ -20,10 +20,10 @@ pub struct Button {
 
 impl Default for Button {
     fn default() -> Button {
-        let focused_style = Style::default().bg(Color::LightRed);
-        let normal_style = Style::default().bg(Color::White);
+        let focused_style = Style::default().fg(Color::White).bg(Color::LightRed);
+        let normal_style = Style::default().fg(Color::Black).bg(Color::White);
         let clicked_style = Style::default().add_modifier(Modifier::BOLD);
-        let disabled_style = Style::default().bg(Color::Gray);
+        let disabled_style = Style::default().fg(Color::Black).bg(Color::Gray);
         let text = OwnedSpans::from("Button");
         Button {
             disabled_style,
