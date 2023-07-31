@@ -65,6 +65,6 @@ some essential ones. MKube is an attempt to resolve this issue I had myself.
 ## Licencing
 
 ***To Be Done:*** *If needed, please contact me. I have not figured this out for the moment but 
-certainly will licence this software as GPLv3*
+certainly will licence this software under GPLv3*
 
 Fusetim (2023) - All rights reserved.
