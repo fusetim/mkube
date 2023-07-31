@@ -24,6 +24,7 @@ remotefs-smb = { version = "^0.2", optional = true }
 urlencoding = "2"
 futures-util = "0.3"
 unicode-width = "^0.1"
+unicode-segmentation = "1.9.0"
 
 [features]
 default = ["ftp", "smb"]

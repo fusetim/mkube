@@ -6,6 +6,7 @@ use tui::{
     layout::{Rect, Constraint, Direction, Layout},
 };
 use crossterm::event::{KeyEvent, KeyCode, KeyModifiers};
+use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(Clone, Debug)]
 pub struct Input {
@@ -42,27 +43,35 @@ impl InputState {
     pub fn input(&mut self, kev: KeyEvent) -> bool {
         match kev.code {
             KeyCode::Char(c) => {
-                let prev = self.value.split_at(self.cursor);
-                self.value = format!("{}{}{}", prev.0, c, prev.1);
+                let mut gs = self.value.graphemes(false);
+                let (prev, follow) : (Vec<_>, Vec<_>) = gs.into_iter().enumerate().partition(|(i, _)| i < &self.cursor);
+                let prev = prev.into_iter().fold(String::new(), |acc, (_, c)| format!("{}{}", acc, c));
+                let follow = follow.into_iter().fold(String::new(), |acc, (_, c)| format!("{}{}", acc, c));
+                self.value = format!("{}{}{}", prev, c, follow);
                 self.cursor += 1;
             },
             KeyCode::Backspace => {
                 if self.cursor > 0 {
+                    let mut gs = self.value.graphemes(false);
                     if self.cursor == self.value.len() {
-                        self.value.pop();
+                        gs.next_back();
+                        self.value = gs.as_str().to_owned();
                     } else {
-                        let prev = self.value.split_at(self.cursor-1);
-                        let follow = prev.1[1..].to_owned();
-                        self.value = format!("{}{}", prev.0, follow);
+                        let (prev, follow) : (Vec<_>, Vec<_>) = gs.into_iter().enumerate().partition(|(i, _)| i < &(self.cursor-1));
+                        let prev = prev.into_iter().fold(String::new(), |acc, (_, c)| format!("{}{}", acc, c));
+                        let follow = follow.into_iter().skip(1).fold(String::new(), |acc, (_, c)| format!("{}{}", acc, c));
+                        self.value = format!("{}{}", prev, follow);
                     }
                     self.cursor -= 1;
                 }
             },
             KeyCode::Delete => {
                 if self.cursor < self.value.len() {
-                    let prev = self.value.split_at(self.cursor);
-                    let follow = prev.1[1..].to_owned();
-                    self.value = format!("{}{}", prev.0, follow);
+                    let mut gs = self.value.graphemes(false);
+                    let (prev, follow) : (Vec<_>, Vec<_>) = gs.into_iter().enumerate().partition(|(i, _)| i < &self.cursor);
+                    let prev = prev.into_iter().fold(String::new(), |acc, (_, c)| format!("{}{}", acc, c));
+                    let follow = follow.into_iter().skip(1).fold(String::new(), |acc, (_, c)| format!("{}{}", acc, c));
+                    self.value = format!("{}{}", prev, follow);
                 }
             },
             KeyCode::Left => {
@@ -151,80 +160,32 @@ impl StatefulWidget for Input {
                         .style(style)
                 }
             } else {
+                let len = state.value.graphemes(false).count();
                 let width = area.width as usize;
                 let text_col = state.cursor / width;
                 let text_start = (text_col * width).saturating_sub(10);
                 let cursor_pos = state.cursor - text_start;
                 let text_end = Ord::min(text_start + (width as usize), state.value.len());
-                let content = get_within_char_boundaries(&state.value, text_start..text_end).unwrap();
+                let content : Vec<_> = state.value.graphemes(false).into_iter().skip(text_start).take(text_end.saturating_sub(text_start)).collect();
                 if state.focused {
-                    if state.value.len() == state.cursor {
+                    if len <= state.cursor {
                         Paragraph::new(Spans::from(vec![
-                            Span::raw(content),
+                            Span::raw(String::from_iter(content)),
                             Span::styled(tui::symbols::block::FULL, Style::default().bg(Color::Red)),
                         ])).style(style)
                     } else {
-                        let parts = state.value.split_at(cursor_pos);
-                        let parts_ = parts.1.split_at(1);
                         Paragraph::new(Spans::from(vec![
-                            Span::raw(parts.0),
-                            Span::styled(parts_.0, Style::default().bg(Color::White)),
-                            Span::raw(parts_.1),
+                            Span::raw(String::from_iter(content[..(cursor_pos)].to_owned())),
+                            Span::styled(content[cursor_pos], Style::default().bg(Color::White)),
+                            Span::raw(String::from_iter(content[(cursor_pos+1)..].to_owned())),
                         ])).style(style)
                     }
                 } else {
-                    Paragraph::new(Text::raw(content))
+                    Paragraph::new(Text::raw(String::from_iter(content)))
                         .style(style)
                 }
             }
         };
         par.render(chunks[0], buf);
-    }
-}
-
-#[inline]
-fn floor_char_boundary<'a>(text: &'a str, index: usize) -> usize {
-    if index >= text.len() {
-        text.len()
-    } else {
-        let lower_bound = index.saturating_sub(3);
-        let new_index = (lower_bound..(index+1))
-            .rposition(|c| text.is_char_boundary(c));
-
-        // SAFETY: we know that the character boundary will be within four bytes
-        unsafe { lower_bound + new_index.unwrap_unchecked() }
-    }
-}
-
-#[inline]
-fn ceil_char_boundary<'a>(text: &'a str, index: usize) -> usize {
-    if index > text.len() {
-        text.len()
-    } else {
-        let upper_bound = Ord::min(index + 4, text.len());
-        (index..upper_bound)
-            .position(|c| text.is_char_boundary(c))
-            .map_or(upper_bound, |pos| pos + index)
-    }
-}
-
-fn get_within_char_boundaries<'a, I: std::ops::RangeBounds<usize>>(text: &'a str, i: I) -> Option<&'a str> {
-    use std::ops::Bound;
-    let start = match i.start_bound() {
-        Bound::Included(u) => Bound::Included(ceil_char_boundary(text, *u)),
-        Bound::Excluded(u) => Bound::Included(ceil_char_boundary(text, u.saturating_add(1))),
-        Bound::Unbounded => Bound::Unbounded
-    };
-    let end = match i.end_bound() {
-        Bound::Included(u) => Bound::Included(floor_char_boundary(text, *u)),
-        Bound::Excluded(u) => Bound::Included(floor_char_boundary(text, u.saturating_sub(1))),
-        Bound::Unbounded => Bound::Unbounded
-    };
-    match (start, end) {
-        (Bound::Unbounded,Bound::Unbounded) => text.get(..),
-        (Bound::Included(u),Bound::Unbounded) => text.get(u..),
-        (Bound::Included(u),Bound::Included(v)) => text.get(u..=v),
-        (Bound::Unbounded,Bound::Included(v)) => text.get(..=v),
-        _ => unimplemented!(),
     }
 }

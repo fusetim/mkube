@@ -866,6 +866,7 @@ dependencies = [
  "tmdb-api",
  "tokio",
  "tui",
+ "unicode-segmentation",
  "unicode-width",
  "url",
  "urlencoding",
