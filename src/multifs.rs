@@ -1,15 +1,15 @@
 use crate::localfs::LocalFs;
-use remotefs::fs::RemoteFs;
-use std::sync::{Mutex, Arc};
-use std::path::PathBuf;
-use std::str::FromStr;
+use anyhow::{anyhow, Result};
 use metadata::MediaFileMetadata;
-use std::io::{Cursor, Read, Seek, Write, BufRead, Result as IoResult, self, SeekFrom};
-use anyhow::{Result, anyhow};
+use remotefs::fs::RemoteFs;
 #[cfg(feature = "ftp")]
 use remotefs_ftp::client::FtpFs;
 #[cfg(feature = "smb")]
-use remotefs_smb::{SmbFs};
+use remotefs_smb::SmbFs;
+use std::io::{self, Cursor, Read, Result as IoResult, Seek, SeekFrom, Write};
+use std::path::PathBuf;
+use std::str::FromStr;
+use std::sync::{Arc, Mutex};
 
 pub enum MultiFs {
     Local(LocalFs),
@@ -29,8 +29,6 @@ impl MultiFs {
             MultiFs::Smb(smb) => smb,
         }
     }
-
-
 }
 
 #[derive(Clone, Debug)]
@@ -40,17 +38,17 @@ pub struct OwnedCursor {
 
 impl OwnedCursor {
     pub fn new() -> Self {
-        Self{ inner: Arc::new(Mutex::new(Cursor::new(Vec::new()))) }
+        Self {
+            inner: Arc::new(Mutex::new(Cursor::new(Vec::new()))),
+        }
     }
 }
 
 impl Read for OwnedCursor {
     fn read(&mut self, buf: &mut [u8]) -> IoResult<usize> {
         match self.inner.lock() {
-            Ok(mut inner) => {
-                (*inner).read(buf)
-            },
-            Err(_err) => { Err(io::Error::new(io::ErrorKind::Other, "Mutex failed!")) },
+            Ok(mut inner) => (*inner).read(buf),
+            Err(_err) => Err(io::Error::new(io::ErrorKind::Other, "Mutex failed!")),
         }
     }
 }
@@ -58,18 +56,14 @@ impl Read for OwnedCursor {
 impl Write for OwnedCursor {
     fn write(&mut self, buf: &[u8]) -> IoResult<usize> {
         match self.inner.lock() {
-            Ok(mut inner) => {
-                (*inner).write(buf)
-            },
-            Err(_err) => { Err(io::Error::new(io::ErrorKind::Other, "Mutex failed!")) },
+            Ok(mut inner) => (*inner).write(buf),
+            Err(_err) => Err(io::Error::new(io::ErrorKind::Other, "Mutex failed!")),
         }
     }
     fn flush(&mut self) -> IoResult<()> {
         match self.inner.lock() {
-            Ok(mut inner) => {
-                (*inner).flush()
-            },
-            Err(_err) => { Err(io::Error::new(io::ErrorKind::Other, "Mutex failed!")) },
+            Ok(mut inner) => (*inner).flush(),
+            Err(_err) => Err(io::Error::new(io::ErrorKind::Other, "Mutex failed!")),
         }
     }
 }
@@ -77,26 +71,24 @@ impl Write for OwnedCursor {
 impl Seek for OwnedCursor {
     fn seek(&mut self, pos: SeekFrom) -> IoResult<u64> {
         match self.inner.lock() {
-            Ok(mut inner) => {
-                (*inner).seek(pos)
-            },
-            Err(_err) => { Err(io::Error::new(io::ErrorKind::Other, "Mutex failed!")) },
+            Ok(mut inner) => (*inner).seek(pos),
+            Err(_err) => Err(io::Error::new(io::ErrorKind::Other, "Mutex failed!")),
         }
     }
 }
 
-pub fn open_multifs_media(mfs: &mut dyn RemoteFs, mut ffmpeg_base: url::Url, path: PathBuf) -> Result<MediaFileMetadata> {
-    use ffmpeg_next as ffmpeg;
+pub fn open_multifs_media(
+    mfs: &mut dyn RemoteFs,
+    mut ffmpeg_base: url::Url,
+    path: PathBuf,
+) -> Result<MediaFileMetadata> {
     use ffmpeg::media::Type;
-    use ffmpeg::util::rational::Rational;
-    use std::fs;
-    use std::io;
-    use std::path::Path;
+    use ffmpeg_next as ffmpeg;
+    use metadata::media_file::{MediaFileMetadataOptions, StreamTags};
     use metadata::prejudice;
-    use metadata::scan::{self, ScanType};
-    use metadata::stream::{parse_stream_meatadata, StreamMetadata};
-    use metadata::tags::{Tags, ToTags};
-    use metadata::media_file::{StreamTags, MediaFileMetadataOptions};
+    use metadata::scan;
+    use metadata::stream::parse_stream_meatadata;
+    use metadata::tags::ToTags;
     use metadata::util;
 
     let decoded_path = urlencoding::decode(ffmpeg_base.path())
@@ -104,13 +96,23 @@ pub fn open_multifs_media(mfs: &mut dyn RemoteFs, mut ffmpeg_base: url::Url, pat
     let mut root = PathBuf::from_str(&decoded_path).unwrap();
     ffmpeg_base.set_path("/");
     root.push(&path);
-    let ff_path = PathBuf::from_str(&format!("{}/{}", ffmpeg_base.to_string(), root.display())).unwrap();
+    let ff_path =
+        PathBuf::from_str(&format!("{}/{}", ffmpeg_base.to_string(), root.display())).unwrap();
 
-    let mut format_ctx = ffmpeg::format::input(&ff_path)
-        .map_err(|err| anyhow!("FFMpeg error: open failed for {}, causes:\n{:?}", ff_path.display(), err))?;
+    let mut format_ctx = ffmpeg::format::input(&ff_path).map_err(|err| {
+        anyhow!(
+            "FFMpeg error: open failed for {}, causes:\n{:?}",
+            ff_path.display(),
+            err
+        )
+    })?;
 
     let file_name = path.file_name().unwrap().to_str().unwrap().to_string();
-    let file_size = mfs.stat(&path).map_err(|err| anyhow!("Remotefs error: failed to read metadata {:?}", err))?.metadata.size;
+    let file_size = mfs
+        .stat(&path)
+        .map_err(|err| anyhow!("Remotefs error: failed to read metadata {:?}", err))?
+        .metadata
+        .size;
     let file_size_base10 = util::human_size(file_size, util::Base::Base10);
     let file_size_base2 = util::human_size(file_size, util::Base::Base2);
 
@@ -152,9 +154,8 @@ pub fn open_multifs_media(mfs: &mut dyn RemoteFs, mut ffmpeg_base: url::Url, pat
     let streams_metadata_rendered = _streams_metadata
         .iter()
         .map(|m| {
-            m.render_default().unwrap_or_else(|_| {
-                panic!("failed to render metadata for stream #{}", m.index())
-            })
+            m.render_default()
+                .unwrap_or_else(|_| panic!("failed to render metadata for stream #{}", m.index()))
         })
         .collect::<Vec<_>>();
 

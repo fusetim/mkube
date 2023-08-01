@@ -1,22 +1,20 @@
+use crossterm::event::KeyCode;
+use std::path::PathBuf;
 use tui::{
-    style::{Style, Color},
     buffer::Buffer,
-    layout::{Constraint, Rect, Direction},
-    widgets::{StatefulWidget, Widget, Block, Borders, BorderType},
+    layout::Rect,
+    style::{Color, Style},
+    widgets::{Block, BorderType, Borders, StatefulWidget, Widget},
 };
 
-use std::path::PathBuf;
-use crossterm::event::KeyCode;
-
-
 pub mod details;
-pub mod table;
 pub mod search;
+pub mod table;
 
-use table::{MovieTable, MovieTableState};
+use crate::views::widgets::InputState;
+use crate::AppEvent;
 use search::{MovieSearch, MovieSearchState};
-use crate::{AppEvent, AppState, AppMessage};
-use crate::views::widgets::{Input, InputState};
+use table::{MovieTable, MovieTableState};
 
 #[derive(Clone, Debug, Default)]
 pub struct MovieManager {
@@ -57,18 +55,18 @@ impl StatefulWidget for MovieManager {
         let mut block = Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::White))
-            .border_type(BorderType::Rounded); 
-        let inner = block.inner(area.clone());   
+            .border_type(BorderType::Rounded);
+        let inner = block.inner(area.clone());
         match state {
             MovieManagerState::Table(ref mut state) => {
                 block = block.title(" Movies ");
                 StatefulWidget::render(self.table, inner, buf, state);
-            },
+            }
             MovieManagerState::Search(ref mut state) => {
                 block = block.title(" Search ");
                 StatefulWidget::render(self.search, inner, buf, state);
-            },
-            _ => { },
+            }
+            _ => {}
         }
         Widget::render(block, area, buf);
     }
@@ -77,22 +75,24 @@ impl StatefulWidget for MovieManager {
 impl MovieManagerState {
     pub fn input(&mut self, app_event: AppEvent) -> bool {
         match self {
-            MovieManagerState::Table(ref mut state) => {
-                match app_event {
-                    AppEvent::MovieManagerEvent(MovieManagerEvent::SearchMovie((movie, fs_id, path))) => {
-                        let mut query_state = InputState::default();
-                        query_state.set_value(&movie.title);
-                        let new_state = MovieSearchState {
-                            movie_path: path,
-                            movie_fs_id: fs_id,
-                            query_state,
-                            ..Default::default()
-                        };
-                        *self = MovieManagerState::Search(new_state);
-                        true
-                    }
-                    _ => state.input(app_event),
+            MovieManagerState::Table(ref mut state) => match app_event {
+                AppEvent::MovieManagerEvent(MovieManagerEvent::SearchMovie((
+                    movie,
+                    fs_id,
+                    path,
+                ))) => {
+                    let mut query_state = InputState::default();
+                    query_state.set_value(&movie.title);
+                    let new_state = MovieSearchState {
+                        movie_path: path,
+                        movie_fs_id: fs_id,
+                        query_state,
+                        ..Default::default()
+                    };
+                    *self = MovieManagerState::Search(new_state);
+                    true
                 }
+                _ => state.input(app_event),
             },
             MovieManagerState::Search(ref mut state) => {
                 if let AppEvent::KeyEvent(kev) = app_event {
@@ -105,8 +105,8 @@ impl MovieManagerState {
                 } else {
                     state.input(app_event)
                 }
-            },
-            _ => { false },
+            }
+            _ => false,
         }
     }
 }

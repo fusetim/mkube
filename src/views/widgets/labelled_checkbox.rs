@@ -1,15 +1,11 @@
-
+use crossterm::event::KeyEvent;
 use tui::{
-    style::{Style},
-    widgets::{Widget, StatefulWidget, Paragraph, Wrap},
-    text::{Text},
     buffer::Buffer,
-    layout::{Rect, Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
+    widgets::{Paragraph, StatefulWidget, Widget, Wrap},
 };
-use std::io::stdout;
-use crossterm::event::{KeyEvent};
 
-use crate::util::{OwnedSpan, OwnedSpans};
+use crate::util::OwnedSpans;
 use crate::views::widgets::checkbox::{Checkbox, CheckboxState};
 
 #[derive(Clone, Debug)]
@@ -20,8 +16,9 @@ pub struct LabelledCheckbox {
 }
 
 impl LabelledCheckbox {
-    pub fn new<T>(label: T, checkbox: Checkbox) -> Self 
-    where T: Into<OwnedSpans>
+    pub fn new<T>(label: T, checkbox: Checkbox) -> Self
+    where
+        T: Into<OwnedSpans>,
     {
         let label = label.into();
         let width = label.width();
@@ -36,14 +33,15 @@ impl LabelledCheckbox {
         self.checkbox = checkbox;
     }
 
-    pub fn with_label<T>(&mut self, label: T) 
-    where T: Into<OwnedSpans>
+    pub fn with_label<T>(&mut self, label: T)
+    where
+        T: Into<OwnedSpans>,
     {
         self.label = label.into();
     }
 
     pub fn with_label_constraint(&mut self, constraint: Constraint) {
-        self.label_constraint= constraint;
+        self.label_constraint = constraint;
     }
 }
 
@@ -75,12 +73,11 @@ impl LabelledCheckboxState {
 
     pub fn check(&mut self, state: bool) {
         self.checkbox_state.check(state);
-    } 
+    }
 
     pub fn is_checked(&self) -> bool {
         self.checkbox_state.is_checked()
     }
-
 }
 
 impl StatefulWidget for LabelledCheckbox {
@@ -88,27 +85,23 @@ impl StatefulWidget for LabelledCheckbox {
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let rows = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(
-            [
-                Constraint::Min(1),
-                Constraint::Percentage(100),
-            ].as_ref()
-        )
-        .split(area.clone());
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(1), Constraint::Percentage(100)].as_ref())
+            .split(area.clone());
         let chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints(
-            [
-                Constraint::Length(3),
-                Constraint::Length(1),
-                self.label_constraint,
-                Constraint::Percentage(100),
-            ].as_ref()
-        )
-        .split(rows[0]);
+            .direction(Direction::Horizontal)
+            .constraints(
+                [
+                    Constraint::Length(3),
+                    Constraint::Length(1),
+                    self.label_constraint,
+                    Constraint::Percentage(100),
+                ]
+                .as_ref(),
+            )
+            .split(rows[0]);
 
-        let label = Paragraph::new(self.label).wrap(Wrap { trim: true});
+        let label = Paragraph::new(self.label).wrap(Wrap { trim: true });
         Widget::render(label, chunks[2], buf);
         StatefulWidget::render(self.checkbox, chunks[0], buf, &mut state.checkbox_state);
     }

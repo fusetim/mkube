@@ -1,11 +1,11 @@
+use crossterm::event::{KeyCode, KeyEvent};
 use tui::{
-    style::{Style, Color, Modifier},
-    widgets::{Widget, StatefulWidget, Paragraph, Wrap},
-    text::{Text, Span, Spans},
     buffer::Buffer,
-    layout::{Rect, Constraint, Direction, Layout},
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
+    text::{Span, Spans, Text},
+    widgets::{Paragraph, StatefulWidget, Widget, Wrap},
 };
-use crossterm::event::{KeyEvent, KeyCode, KeyModifiers};
 use unicode_segmentation::UnicodeSegmentation;
 
 #[derive(Clone, Debug)]
@@ -23,7 +23,9 @@ impl Default for Input {
         Input {
             style: Style::default().fg(Color::Black).bg(Color::Gray),
             focus_style: Style::default().fg(Color::White).bg(Color::LightRed),
-            disable_style: Style::default().fg(Color::Black).add_modifier(Modifier::UNDERLINED),
+            disable_style: Style::default()
+                .fg(Color::Black)
+                .add_modifier(Modifier::UNDERLINED),
             placeholder: None,
             placeholder_style: Style::default().add_modifier(Modifier::ITALIC),
             horiz_constraint: Constraint::Percentage(100),
@@ -45,31 +47,31 @@ impl InputState {
             KeyCode::Char(c) => {
                 self.value.insert(self.cursor, format!("{c}"));
                 self.cursor += 1;
-            },
+            }
             KeyCode::Backspace => {
                 if self.cursor > 0 {
-                    self.value.remove(self.cursor-1);
+                    self.value.remove(self.cursor - 1);
                     self.cursor -= 1;
                 }
-            },
+            }
             KeyCode::Delete => {
                 if self.cursor < self.value.len() {
                     self.value.remove(self.cursor);
                 }
-            },
+            }
             KeyCode::Left => {
                 self.cursor = self.cursor.saturating_sub(1);
-            },
-            KeyCode::Right => {
-                self.cursor = Ord::min(self.cursor + 1, self.value.len())
-            },
+            }
+            KeyCode::Right => self.cursor = Ord::min(self.cursor + 1, self.value.len()),
             KeyCode::Up => {
                 self.cursor = 0;
-            },
+            }
             KeyCode::Down | KeyCode::End => {
                 self.cursor = self.value.len();
-            },
-            _ => { return false; },
+            }
+            _ => {
+                return false;
+            }
         };
         true
     }
@@ -91,7 +93,12 @@ impl InputState {
     }
 
     pub fn set_value<T: Into<String>>(&mut self, val: T) {
-        self.value = val.into().graphemes(false).into_iter().map(|s| s.to_owned()).collect();
+        self.value = val
+            .into()
+            .graphemes(false)
+            .into_iter()
+            .map(|s| s.to_owned())
+            .collect();
     }
 
     pub fn get_value<'a>(&'a self) -> String {
@@ -104,22 +111,13 @@ impl StatefulWidget for Input {
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let rows = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(
-            [
-                Constraint::Min(1),
-                Constraint::Percentage(100),
-            ].as_ref()
-        )
-        .split(area.clone());
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(1), Constraint::Percentage(100)].as_ref())
+            .split(area.clone());
         let chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints(
-            [
-                self.horiz_constraint,
-            ].as_ref()
-        )
-        .split(rows[0]);
+            .direction(Direction::Horizontal)
+            .constraints([self.horiz_constraint].as_ref())
+            .split(rows[0]);
 
         let style = if state.disabled {
             self.disable_style
@@ -129,18 +127,20 @@ impl StatefulWidget for Input {
             self.style
         };
         let par = if area.width < 10 {
-            let error_style = Style::default().bg(Color::Red).fg(Color::White).add_modifier(Modifier::BOLD).add_modifier(Modifier::SLOW_BLINK);
-            Paragraph::new(Text::raw("TOO SMALL"))
-                .style(error_style)
-        } else { 
-            if state.value.len() == 0 { 
+            let error_style = Style::default()
+                .bg(Color::Red)
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD)
+                .add_modifier(Modifier::SLOW_BLINK);
+            Paragraph::new(Text::raw("TOO SMALL")).style(error_style)
+        } else {
+            if state.value.len() == 0 {
                 if let Some(placeholder) = self.placeholder.clone() {
                     Paragraph::new(Text::raw(placeholder))
                         .style(style.patch(self.placeholder_style.clone()))
                         .wrap(Wrap { trim: true })
                 } else {
-                    Paragraph::new(Text::raw(state.get_value()))
-                        .style(style)
+                    Paragraph::new(Text::raw(state.get_value())).style(style)
                 }
             } else {
                 let width = area.width as usize;
@@ -148,23 +148,36 @@ impl StatefulWidget for Input {
                 let text_start = (text_col * width).saturating_sub(10);
                 let cursor_pos = state.cursor - text_start;
                 let text_end = Ord::min(text_start + (width as usize), state.value.len());
-                let content : Vec<_> = state.value.iter().skip(text_start).take(text_end.saturating_sub(text_start)).map(|s| s.as_str()).collect();
+                let content: Vec<_> = state
+                    .value
+                    .iter()
+                    .skip(text_start)
+                    .take(text_end.saturating_sub(text_start))
+                    .map(|s| s.as_str())
+                    .collect();
                 if state.focused {
                     if state.value.len() <= state.cursor {
                         Paragraph::new(Spans::from(vec![
                             Span::raw(String::from_iter(content)),
-                            Span::styled(tui::symbols::block::FULL, Style::default().bg(Color::Red)),
-                        ])).style(style)
+                            Span::styled(
+                                tui::symbols::block::FULL,
+                                Style::default().bg(Color::Red),
+                            ),
+                        ]))
+                        .style(style)
                     } else {
                         Paragraph::new(Spans::from(vec![
                             Span::raw(String::from_iter(content[..(cursor_pos)].to_owned())),
-                            Span::styled(content[cursor_pos], Style::default().fg(Color::Black).bg(Color::White)),
-                            Span::raw(String::from_iter(content[(cursor_pos+1)..].to_owned())),
-                        ])).style(style)
+                            Span::styled(
+                                content[cursor_pos],
+                                Style::default().fg(Color::Black).bg(Color::White),
+                            ),
+                            Span::raw(String::from_iter(content[(cursor_pos + 1)..].to_owned())),
+                        ]))
+                        .style(style)
                     }
                 } else {
-                    Paragraph::new(Text::raw(String::from_iter(content)))
-                        .style(style)
+                    Paragraph::new(Text::raw(String::from_iter(content))).style(style)
                 }
             }
         };

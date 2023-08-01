@@ -1,45 +1,35 @@
+use anyhow::{anyhow, Result};
+use futures_util::{FutureExt, StreamExt};
+use remotefs::fs::Metadata;
+use std::io;
 use tmdb_api::client::Client as TmdbClient;
-use remotefs::fs::{RemoteFs, Metadata};
-use tokio::fs::{File, read_dir};
-use tokio::io::{AsyncWriteExt,AsyncReadExt};
+use tokio::io::AsyncWriteExt;
+use tokio::sync::mpsc::unbounded_channel;
 use tokio::time::{self, Duration};
-use tokio::sync::mpsc::{UnboundedSender, UnboundedReceiver, unbounded_channel};
-use anyhow::{Result, anyhow};
-use futures_util::{StreamExt, FutureExt};
-use std::{io};
-use std::path::PathBuf;
-use std::str::FromStr;
 
-use tui::{
-    backend::{Backend, CrosstermBackend},
-    layout::{Constraint, Direction, Layout},
-    widgets::{Block, Borders},
-    Frame,
-    terminal,
-    terminal::{Terminal},
+use crossterm::event::{
+    DisableMouseCapture, EnableMouseCapture, Event, EventStream, KeyCode, KeyModifiers,
 };
-use crossterm::terminal::{enable_raw_mode, disable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,};
 use crossterm::execute;
-use crossterm::event::{EnableMouseCapture, DisableMouseCapture, Event, EventStream, KeyCode, KeyModifiers};
+use crossterm::terminal::{
+    disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
+};
+use tui::{backend::CrosstermBackend, terminal::Terminal};
 
-use mkube::views;
-use mkube::nfo;
-use mkube::localfs;
 use mkube::multifs;
-use mkube::util;
+use mkube::views;
 
-use multifs::{MultiFs, OwnedCursor};
+use multifs::MultiFs;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-
     // setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
-    
+
     match run(&mut terminal).await {
         Ok(()) => {
             println!("Exit success.");
@@ -61,20 +51,26 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn run<B>(terminal: &mut Terminal<B>) -> Result<()> 
-where B: tui::backend::Backend
+async fn run<B>(terminal: &mut Terminal<B>) -> Result<()>
+where
+    B: tui::backend::Backend,
 {
     let (sender, mut receiver) = unbounded_channel();
     let tmdb_client = TmdbClient::new("74a673b58f22dd90b8ac750b62e00b0b".into());
-    mkube::MESSAGE_SENDER.set(sender).map_err(|err| anyhow!("Failed to init MESSAGE_SENDER, causes:\n{:?}", err))?;
-    let app = views::App { settings_page: views::settings::SettingsPage::new(), movie_manager: Default::default() };
+    mkube::MESSAGE_SENDER
+        .set(sender)
+        .map_err(|err| anyhow!("Failed to init MESSAGE_SENDER, causes:\n{:?}", err))?;
+    let app = views::App {
+        settings_page: views::settings::SettingsPage::new(),
+        movie_manager: Default::default(),
+    };
     let mut state = views::AppState::default();
     let mut event_reader = EventStream::new();
-    let mut tick = time::interval(Duration::from_millis(1000/15));
+    let tick = time::interval(Duration::from_millis(1000 / 15));
     tokio::pin!(tick);
 
     loop {
-        let mut event = event_reader.next().fuse();
+        let event = event_reader.next().fuse();
 
         tokio::select! {
             _ = tick.tick() => {
@@ -106,7 +102,7 @@ where B: tui::backend::Backend
             }
             msg = receiver.recv() => {
                 if let Some(msg) = msg {
-                    use mkube::{AppMessage, AppEvent, views::settings::{SettingsMessage, SettingsEvent}, library::Library};
+                    use mkube::{AppMessage, AppEvent, views::settings::{SettingsMessage, SettingsEvent}};
                     use mkube::{ views::movie_manager::{MovieManagerEvent, MovieManagerMessage}};
                     match msg {
                         AppMessage::Future(builder) => {
@@ -125,7 +121,7 @@ where B: tui::backend::Backend
                                 let l = state.libraries.swap_remove(ind);
                                 let _ = state.conns.swap_remove(ind);
                                 state.register_event(AppEvent::SettingsEvent(SettingsEvent::EditExisting(l)));
-                            } 
+                            }
                         },
                         AppMessage::SettingsMessage(SettingsMessage::SaveLibrary(lib)) => {
                             if let Ok(mut conn) = MultiFs::try_from(&lib) {
@@ -159,7 +155,7 @@ where B: tui::backend::Backend
                                             });
                                             state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::MovieDiscovered((movie, i, path))));
                                         }
-                                    } 
+                                    }
                                 }
                             }
                         },
@@ -272,16 +268,16 @@ async fn main() -> Result<()> {
     for path in movies {
         nfo_tasks.push((path.clone(), try_open_nfo(&mut lfs, path).await));
     }
-    
+
     for task in nfo_tasks {
         match task {
-            (path, Ok(movie)) => { 
+            (path, Ok(movie)) => {
                 println!("[NFO] Found {} at {}.", movie.title, path.display());
                 /*let mt = get_metadata(path.clone()).await?;
                 dbg!(mt);*/
             },
-            (mut path, Err(err)) => { 
-                println!("[NFO] {} do not have a NFO, causes:\n{:?}", path.display(), err); 
+            (mut path, Err(err)) => {
+                println!("[NFO] {} do not have a NFO, causes:\n{:?}", path.display(), err);
                 let name = path.file_stem()
                     .ok_or(anyhow!("No filename"))
                     .map(|title| title.to_string_lossy())

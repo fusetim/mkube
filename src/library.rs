@@ -1,14 +1,13 @@
-use url::Url;
 use std::path::PathBuf;
-use std::str::FromStr;
+use url::Url;
 
 #[cfg(feature = "ftp")]
 use remotefs_ftp::client::FtpFs;
 #[cfg(feature = "smb")]
-use remotefs_smb::{SmbFs, SmbCredentials, SmbOptions};
+use remotefs_smb::{SmbCredentials, SmbFs, SmbOptions};
 
-use crate::multifs::MultiFs;
 use crate::localfs::LocalFs;
+use crate::multifs::MultiFs;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub enum LibraryType {
@@ -54,8 +53,13 @@ impl TryFrom<&Library> for Url {
 
     fn try_from(l: &Library) -> Result<Url, ()> {
         let scheme = l.fs_type.to_scheme();
-        let mut url = Url::parse(&format!("{}://{}{}", scheme, l.host.as_deref().unwrap_or(""), l.path.display()))
-            .map_err(|_|{})?;
+        let mut url = Url::parse(&format!(
+            "{}://{}{}",
+            scheme,
+            l.host.as_deref().unwrap_or(""),
+            l.path.display()
+        ))
+        .map_err(|_| {})?;
         if url.has_host() {
             if let Some(user) = l.username.as_deref() {
                 url.set_username(user)?;
@@ -71,9 +75,7 @@ impl TryFrom<&Library> for MultiFs {
 
     fn try_from(l: &Library) -> Result<MultiFs, ()> {
         match l.fs_type {
-            LibraryType::Local => {
-                Ok(MultiFs::Local(LocalFs::new(l.path.clone())))
-            }, 
+            LibraryType::Local => Ok(MultiFs::Local(LocalFs::new(l.path.clone()))),
             #[cfg(feature = "ftp")]
             LibraryType::Ftp => {
                 if let Some(host) = &l.host {
@@ -88,12 +90,11 @@ impl TryFrom<&Library> for MultiFs {
                 } else {
                     Err(())
                 }
-            },
+            }
             #[cfg(feature = "smb")]
             LibraryType::Smb => {
                 if let Some(host) = &l.host {
-                    let mut crds = SmbCredentials::default()
-                        .server(format!("smb://{}", host));
+                    let mut crds = SmbCredentials::default().server(format!("smb://{}", host));
                     if let Some(username) = &l.username {
                         crds = crds.username(username);
                     }
@@ -109,7 +110,7 @@ impl TryFrom<&Library> for MultiFs {
                 } else {
                     Err(())
                 }
-            },
+            }
         }
     }
 }

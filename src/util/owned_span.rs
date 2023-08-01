@@ -1,6 +1,6 @@
 use tui::{
+    style::Style,
     text::{Span, Spans, Text},
-    style::{Style},
 };
 use unicode_width::UnicodeWidthStr;
 

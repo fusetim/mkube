@@ -1,11 +1,11 @@
-mod input;
-mod labelled_input;
-mod checkbox;
-mod labelled_checkbox;
 mod button;
+mod checkbox;
+mod input;
+mod labelled_checkbox;
+mod labelled_input;
 
-pub use input::{Input, InputState};
-pub use checkbox::{Checkbox, CheckboxState};
 pub use button::{Button, ButtonState};
-pub use labelled_input::{LabelledInput, LabelledInputState};
+pub use checkbox::{Checkbox, CheckboxState};
+pub use input::{Input, InputState};
 pub use labelled_checkbox::{LabelledCheckbox, LabelledCheckboxState};
+pub use labelled_input::{LabelledInput, LabelledInputState};

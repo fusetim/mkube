@@ -1,21 +1,20 @@
-use tui::widgets::{StatefulWidget, Widget, Block, Tabs, Borders, BorderType, List, ListItem, ListState, Paragraph};
-use tui::{
-    backend::{Backend},
-    layout::{Rect, Constraint, Direction, Layout},
-    Frame,
-    symbols::DOT,
-    text::{Span, Spans, Text},
-    style::{Style, Color, Modifier},
-    buffer::Buffer,
-};
-use crossterm::event::{KeyEvent, KeyCode, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent};
 use std::path::PathBuf;
+use tui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph, StatefulWidget, Widget};
+use tui::{
+    buffer::Buffer,
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
+    text::Span,
+};
 
-use crate::library::{Library, LibraryType, LibraryFlavor};
-use crate::multifs::MultiFs;
-use crate::views::widgets::{Input, InputState, LabelledInput, LabelledInputState, LabelledCheckbox, LabelledCheckboxState, Checkbox, Button, ButtonState};
-use crate::{AppEvent, AppState, AppMessage, MESSAGE_SENDER};
+use crate::library::{Library, LibraryFlavor, LibraryType};
 use crate::util::{OwnedSpan, OwnedSpans};
+use crate::views::widgets::{
+    Button, ButtonState, Checkbox, Input, LabelledCheckbox, LabelledCheckboxState, LabelledInput,
+    LabelledInputState,
+};
+use crate::{AppEvent, AppMessage, AppState, MESSAGE_SENDER};
 
 #[derive(Clone, Debug)]
 pub struct SettingsPage {
@@ -55,10 +54,10 @@ impl SettingsState {
         match self {
             SettingsState::Menu(ref mut state) => {
                 return state.press_key(kev);
-            },
+            }
             SettingsState::Edit(ref mut state) => {
                 return state.press_key(kev);
-            },
+            }
         }
         false
     }
@@ -73,7 +72,7 @@ impl SettingsState {
                 }
                 *self = SettingsState::Menu(SettingsMenuState::new(items));
                 true
-            },
+            }
             AppEvent::SettingsEvent(SettingsEvent::EditNew(fs_type)) => {
                 let mut state = SettingsEditState::default();
                 if fs_type != LibraryType::Local {
@@ -84,7 +83,7 @@ impl SettingsState {
                 state.fs_type = fs_type;
                 *self = SettingsState::Edit(state);
                 true
-            },
+            }
             AppEvent::SettingsEvent(SettingsEvent::EditExisting(lib)) => {
                 let mut state = SettingsEditState::default();
                 if lib.fs_type != LibraryType::Local {
@@ -111,19 +110,19 @@ impl SettingsState {
                 state.fs_type = lib.fs_type;
                 *self = SettingsState::Edit(state);
                 true
-            },
+            }
             AppEvent::SettingsEvent(SettingsEvent::ConnTestResult(tests)) => {
                 if let SettingsState::Edit(ref mut state) = self {
                     state.test_result = Some(tests);
                     state.test.clicked(false);
                     true
-                } else { false }
-            }
-            _ => {
-                match self {
-                    SettingsState::Menu(ref mut state) => state.input(evt),
-                    SettingsState::Edit(ref mut state) => state.input(evt),
+                } else {
+                    false
                 }
+            }
+            _ => match self {
+                SettingsState::Menu(ref mut state) => state.input(evt),
+                SettingsState::Edit(ref mut state) => state.input(evt),
             },
         }
     }
@@ -131,7 +130,9 @@ impl SettingsState {
 
 impl SettingsPage {
     pub fn new() -> Self {
-        SettingsPage { menu: SettingsMenu {} }
+        SettingsPage {
+            menu: SettingsMenu {},
+        }
     }
 }
 
@@ -150,7 +151,6 @@ impl StatefulWidget for SettingsPage {
     }
 }
 
-
 #[derive(Clone, Debug, Default)]
 pub struct SettingsMenu {}
 
@@ -165,18 +165,18 @@ impl StatefulWidget for SettingsMenu {
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .margin(0)
-        .constraints(
-            [
-                Constraint::Percentage(100),
-            ].as_ref()
-        )
-        .split(area.clone());
+            .direction(Direction::Vertical)
+            .margin(0)
+            .constraints([Constraint::Percentage(100)].as_ref())
+            .split(area.clone());
 
-        let mut items : Vec<_> = state.items.iter().map(|i| i.clone().into()).collect();
+        let items: Vec<_> = state.items.iter().map(|i| i.clone().into()).collect();
         let list = List::new(items)
-            .block(Block::default().title(" Manage your libraries ").borders(Borders::ALL))
+            .block(
+                Block::default()
+                    .title(" Manage your libraries ")
+                    .borders(Borders::ALL),
+            )
             .style(Style::default().fg(Color::White))
             .highlight_style(Style::default().add_modifier(Modifier::ITALIC))
             .highlight_symbol("> ");
@@ -189,18 +189,28 @@ impl SettingsMenuState {
     pub fn new(items: Vec<MenuItem>) -> Self {
         Self {
             list_state: ListState::default(),
-            items
+            items,
         }
     }
 
     pub fn press_key(&mut self, kev: KeyEvent) -> bool {
         let opt_len = self.items.len();
         if kev.code == KeyCode::Up {
-            let select = Some(self.list_state.selected().map(|i| (i+opt_len-1) % opt_len).unwrap_or(0));
+            let select = Some(
+                self.list_state
+                    .selected()
+                    .map(|i| (i + opt_len - 1) % opt_len)
+                    .unwrap_or(0),
+            );
             self.list_state.select(select);
-            true 
+            true
         } else if kev.code == KeyCode::Down {
-            let select = Some(self.list_state.selected().map(|i| (i+1) % opt_len).unwrap_or(0));
+            let select = Some(
+                self.list_state
+                    .selected()
+                    .map(|i| (i + 1) % opt_len)
+                    .unwrap_or(0),
+            );
             self.list_state.select(select);
             true
         } else if kev.code == KeyCode::Enter {
@@ -209,21 +219,39 @@ impl SettingsMenuState {
                     if item.selectable {
                         let sender = MESSAGE_SENDER.get().unwrap();
                         match &item.item_type {
-                            MenuItemType::None => { return false; },
+                            MenuItemType::None => {
+                                return false;
+                            }
                             MenuItemType::NewLocalLibrary => {
-                                sender.send(AppMessage::TriggerEvent(AppEvent::SettingsEvent(SettingsEvent::EditNew(LibraryType::Local)))).unwrap();
-                            },
+                                sender
+                                    .send(AppMessage::TriggerEvent(AppEvent::SettingsEvent(
+                                        SettingsEvent::EditNew(LibraryType::Local),
+                                    )))
+                                    .unwrap();
+                            }
                             #[cfg(feature = "ftp")]
                             MenuItemType::NewFtpLibrary => {
-                                sender.send(AppMessage::TriggerEvent(AppEvent::SettingsEvent(SettingsEvent::EditNew(LibraryType::Ftp)))).unwrap();
-                            },
+                                sender
+                                    .send(AppMessage::TriggerEvent(AppEvent::SettingsEvent(
+                                        SettingsEvent::EditNew(LibraryType::Ftp),
+                                    )))
+                                    .unwrap();
+                            }
                             #[cfg(feature = "smb")]
-                            MenuItemType::NewSmbLibrary => { 
-                                sender.send(AppMessage::TriggerEvent(AppEvent::SettingsEvent(SettingsEvent::EditNew(LibraryType::Smb)))).unwrap();
-                            },
+                            MenuItemType::NewSmbLibrary => {
+                                sender
+                                    .send(AppMessage::TriggerEvent(AppEvent::SettingsEvent(
+                                        SettingsEvent::EditNew(LibraryType::Smb),
+                                    )))
+                                    .unwrap();
+                            }
                             MenuItemType::ExistingLibrary(l) => {
-                                sender.send(AppMessage::SettingsMessage(SettingsMessage::EditExisting(l.clone()))).unwrap();
-                            },
+                                sender
+                                    .send(AppMessage::SettingsMessage(
+                                        SettingsMessage::EditExisting(l.clone()),
+                                    ))
+                                    .unwrap();
+                            }
                         }
                         return true;
                     }
@@ -238,12 +266,15 @@ impl SettingsMenuState {
     pub fn input(&mut self, evt: AppEvent) -> bool {
         match evt {
             AppEvent::KeyEvent(kev) => self.press_key(kev),
-            _ => { false },
+            _ => false,
         }
     }
 
     pub fn selected(&self) -> Option<MenuItem> {
-        self.list_state.selected().and_then(|i| self.items.get(i)).cloned()
+        self.list_state
+            .selected()
+            .and_then(|i| self.items.get(i))
+            .cloned()
     }
 }
 
@@ -263,11 +294,12 @@ impl<'a> From<MenuItem> for ListItem<'a> {
 
 impl From<Library> for MenuItem {
     fn from(l: Library) -> MenuItem {
-        let mut url = url::Url::try_from(&l)
+        let url = url::Url::try_from(&l)
             .map(|mut u| {
                 let _ = u.set_password(None);
                 return u.to_string();
-            }).unwrap_or("N/A".into());
+            })
+            .unwrap_or("N/A".into());
         MenuItem::new(format!("{} ({})", &l.name, url))
             .selectable(true)
             .set_type(MenuItemType::ExistingLibrary(l))
@@ -276,7 +308,8 @@ impl From<Library> for MenuItem {
 
 impl MenuItem {
     pub fn new<T>(text: T) -> MenuItem
-    where T: Into<String>
+    where
+        T: Into<String>,
     {
         MenuItem {
             selectable: true,
@@ -291,12 +324,12 @@ impl MenuItem {
         self
     }
 
-    pub fn selectable(mut self, selectable: bool) -> MenuItem{
+    pub fn selectable(mut self, selectable: bool) -> MenuItem {
         self.selectable = selectable;
         self
     }
 
-    pub fn style(mut self, style: Style) -> MenuItem{
+    pub fn style(mut self, style: Style) -> MenuItem {
         self.style = style;
         self
     }
@@ -309,10 +342,14 @@ pub fn standard_actions() -> Vec<MenuItem> {
     items.push(MenuItem::new("Add a FTP library").set_type(MenuItemType::NewFtpLibrary));
     #[cfg(feature = "smb")]
     items.push(MenuItem::new("Add a SMB library").set_type(MenuItemType::NewSmbLibrary));
-    items.push(MenuItem::new(" - Existing libraries -").set_type(MenuItemType::None).selectable(false));
+    items.push(
+        MenuItem::new(" - Existing libraries -")
+            .set_type(MenuItemType::None)
+            .selectable(false),
+    );
     items
 }
- 
+
 #[derive(Debug, Clone, Default)]
 pub enum MenuItemType {
     #[default]
@@ -324,7 +361,6 @@ pub enum MenuItemType {
     NewFtpLibrary,
     ExistingLibrary(Library),
 }
-
 
 #[derive(Clone, Debug)]
 pub struct SettingsEdit {
@@ -360,7 +396,7 @@ pub struct SettingsEditState {
 impl Default for SettingsEdit {
     fn default() -> SettingsEdit {
         SettingsEdit {
-            name: LabelledInput::new("Name: ", Input::default()), 
+            name: LabelledInput::new("Name: ", Input::default()),
             host: LabelledInput::new("Host: ", Input::default()),
             username: LabelledInput::new("Username: ", Input::default()),
             password: LabelledInput::new("Password: ", Input::default()),
@@ -370,7 +406,7 @@ impl Default for SettingsEdit {
             test: Button::default().with_text("Test"),
             save: Button::default().with_text("Save"),
             cancel: Button::default().with_text("Delete"),
-        } 
+        }
     }
 }
 
@@ -385,12 +421,12 @@ impl Default for SettingsEditState {
             password: None,
             path: LabelledInputState::default(),
             movie: LabelledCheckboxState::default(),
-            tv_show: LabelledCheckboxState::default(),   
+            tv_show: LabelledCheckboxState::default(),
             test: ButtonState::default(),
             save: ButtonState::default(),
-            cancel: ButtonState::default(),    
+            cancel: ButtonState::default(),
             test_result: None,
-        } 
+        }
     }
 }
 
@@ -399,47 +435,50 @@ impl StatefulWidget for SettingsEdit {
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let rows = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(
-            [
-                Constraint::Min(1),
-                Constraint::Min(1),
-                Constraint::Min(1),
-                Constraint::Min(1),
-                Constraint::Min(1),
-                Constraint::Min(1),
-                Constraint::Min(1),
-                Constraint::Min(1),
-                Constraint::Percentage(100),
-            ].as_ref()
-        )
-        .split(area.clone());
+            .direction(Direction::Vertical)
+            .constraints(
+                [
+                    Constraint::Min(1),
+                    Constraint::Min(1),
+                    Constraint::Min(1),
+                    Constraint::Min(1),
+                    Constraint::Min(1),
+                    Constraint::Min(1),
+                    Constraint::Min(1),
+                    Constraint::Min(1),
+                    Constraint::Percentage(100),
+                ]
+                .as_ref(),
+            )
+            .split(area.clone());
         let type_selector_cells = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints(
-            [
-                Constraint::Min(14),
-                Constraint::Min(10),
-                Constraint::Min(2),
-                Constraint::Min(12),
-                Constraint::Percentage(100),
-            ].as_ref()
-        )
-        .split(rows[5]);
+            .direction(Direction::Horizontal)
+            .constraints(
+                [
+                    Constraint::Min(14),
+                    Constraint::Min(10),
+                    Constraint::Min(2),
+                    Constraint::Min(12),
+                    Constraint::Percentage(100),
+                ]
+                .as_ref(),
+            )
+            .split(rows[5]);
         let buttons_cells = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints(
-            [
-                Constraint::Min(6),
-                Constraint::Min(2),
-                Constraint::Min(6),
-                Constraint::Min(2),
-                Constraint::Min(8),
-                Constraint::Min(2),
-                Constraint::Percentage(100),
-            ].as_ref()
-        )
-        .split(rows[7]);
+            .direction(Direction::Horizontal)
+            .constraints(
+                [
+                    Constraint::Min(6),
+                    Constraint::Min(2),
+                    Constraint::Min(6),
+                    Constraint::Min(2),
+                    Constraint::Min(8),
+                    Constraint::Min(2),
+                    Constraint::Percentage(100),
+                ]
+                .as_ref(),
+            )
+            .split(rows[7]);
 
         StatefulWidget::render(self.name, rows[0], buf, &mut state.name);
         if let Some(ref mut istate) = state.host {
@@ -456,16 +495,29 @@ impl StatefulWidget for SettingsEdit {
         let type_label = Paragraph::new(Span::raw("Library type: "));
         Widget::render(type_label, type_selector_cells[0], buf);
         StatefulWidget::render(self.movie, type_selector_cells[1], buf, &mut state.movie);
-        StatefulWidget::render(self.tv_show, type_selector_cells[3], buf, &mut state.tv_show);
+        StatefulWidget::render(
+            self.tv_show,
+            type_selector_cells[3],
+            buf,
+            &mut state.tv_show,
+        );
         StatefulWidget::render(self.test, buttons_cells[0], buf, &mut state.test);
         StatefulWidget::render(self.save, buttons_cells[2], buf, &mut state.save);
         StatefulWidget::render(self.cancel, buttons_cells[4], buf, &mut state.cancel);
         let conn_status = if let Some((conn, path)) = state.test_result {
             let mut spans = Vec::new();
             spans.push(OwnedSpan::raw("Connection: "));
-            spans.push(if conn { OwnedSpan::styled("OK", Style::default().fg(Color::Green)) } else { OwnedSpan::styled("Error", Style::default().fg(Color::LightRed)) } );
+            spans.push(if conn {
+                OwnedSpan::styled("OK", Style::default().fg(Color::Green))
+            } else {
+                OwnedSpan::styled("Error", Style::default().fg(Color::LightRed))
+            });
             spans.push(OwnedSpan::raw(" / Path: "));
-            spans.push(if path { OwnedSpan::styled("OK", Style::default().fg(Color::Green)) } else { OwnedSpan::styled("Error", Style::default().fg(Color::LightRed)) } );
+            spans.push(if path {
+                OwnedSpan::styled("OK", Style::default().fg(Color::Green))
+            } else {
+                OwnedSpan::styled("Error", Style::default().fg(Color::LightRed))
+            });
             Paragraph::new(OwnedSpans::from(spans))
         } else {
             Paragraph::new("Connection: Untested / Path: Untested")
@@ -474,22 +526,24 @@ impl StatefulWidget for SettingsEdit {
     }
 }
 
-const SETTINGS_EDIT_SELECTABLES : usize = 10; 
+const SETTINGS_EDIT_SELECTABLES: usize = 10;
 
 impl SettingsEditState {
     pub fn press_key(&mut self, kev: KeyEvent) -> bool {
         if kev.code == KeyCode::Tab {
             self.focus_child(self.focused, false);
-            self.focused = ((self.focused + 1) % SETTINGS_EDIT_SELECTABLES);
+            self.focused = (self.focused + 1) % SETTINGS_EDIT_SELECTABLES;
             while !self.focus_child(self.focused, true) {
-                self.focused = ((self.focused + 1) % SETTINGS_EDIT_SELECTABLES);
+                self.focused = (self.focused + 1) % SETTINGS_EDIT_SELECTABLES;
             }
             true
         } else if kev.code == KeyCode::BackTab {
             self.focus_child(self.focused, false);
-            self.focused = ((self.focused + SETTINGS_EDIT_SELECTABLES - 1) % SETTINGS_EDIT_SELECTABLES);
+            self.focused =
+                (self.focused + SETTINGS_EDIT_SELECTABLES - 1) % SETTINGS_EDIT_SELECTABLES;
             while !self.focus_child(self.focused, true) {
-                self.focused = ((self.focused + SETTINGS_EDIT_SELECTABLES -1 ) % SETTINGS_EDIT_SELECTABLES);
+                self.focused =
+                    (self.focused + SETTINGS_EDIT_SELECTABLES - 1) % SETTINGS_EDIT_SELECTABLES;
             }
             true
         } else {
@@ -500,11 +554,16 @@ impl SettingsEditState {
                     self.movie.check(!self.tv_show.is_checked());
                 } else if self.cancel.is_clicked() {
                     let sender = MESSAGE_SENDER.get().unwrap();
-                    sender.send(crate::AppMessage::Future(Box::new(|appstate: &mut AppState| {
-                        let libs = appstate.libraries.clone(); 
-                        Box::pin(async move {
-                            Some(AppEvent::SettingsEvent(SettingsEvent::OpenMenu(libs)))
-                    })}))).unwrap();
+                    sender
+                        .send(crate::AppMessage::Future(Box::new(
+                            |appstate: &mut AppState| {
+                                let libs = appstate.libraries.clone();
+                                Box::pin(async move {
+                                    Some(AppEvent::SettingsEvent(SettingsEvent::OpenMenu(libs)))
+                                })
+                            },
+                        )))
+                        .unwrap();
                 } else if self.save.is_clicked() {
                     let sender = MESSAGE_SENDER.get().unwrap();
                     let library = Library {
@@ -514,9 +573,17 @@ impl SettingsEditState {
                         username: self.username.as_ref().map(|c| c.get_value().to_owned()),
                         password: self.password.as_ref().map(|c| c.get_value().to_owned()),
                         fs_type: self.fs_type.clone(),
-                        flavor: if self.movie.is_checked() { LibraryFlavor::Movie } else { LibraryFlavor::TvShow },
+                        flavor: if self.movie.is_checked() {
+                            LibraryFlavor::Movie
+                        } else {
+                            LibraryFlavor::TvShow
+                        },
                     };
-                    sender.send(AppMessage::SettingsMessage(SettingsMessage::SaveLibrary(library))).unwrap();
+                    sender
+                        .send(AppMessage::SettingsMessage(SettingsMessage::SaveLibrary(
+                            library,
+                        )))
+                        .unwrap();
                 } else if self.test.is_clicked() {
                     let sender = MESSAGE_SENDER.get().unwrap();
                     let library = Library {
@@ -526,9 +593,17 @@ impl SettingsEditState {
                         username: self.username.as_ref().map(|c| c.get_value().to_owned()),
                         password: self.password.as_ref().map(|c| c.get_value().to_owned()),
                         fs_type: self.fs_type.clone(),
-                        flavor: if self.movie.is_checked() { LibraryFlavor::Movie } else { LibraryFlavor::TvShow },
+                        flavor: if self.movie.is_checked() {
+                            LibraryFlavor::Movie
+                        } else {
+                            LibraryFlavor::TvShow
+                        },
                     };
-                    sender.send(AppMessage::SettingsMessage(SettingsMessage::TestLibrary(library))).unwrap();
+                    sender
+                        .send(AppMessage::SettingsMessage(SettingsMessage::TestLibrary(
+                            library,
+                        )))
+                        .unwrap();
                 }
                 true
             } else {
@@ -540,48 +615,69 @@ impl SettingsEditState {
     pub fn input(&mut self, evt: AppEvent) -> bool {
         match evt {
             AppEvent::KeyEvent(kev) => self.press_key(kev),
-            _ => { false },
+            _ => false,
         }
     }
 
     fn focus_child(&mut self, index: usize, state: bool) -> bool {
         match index {
-            0 => { self.name.focus(state); true },
-            1 => { self.host.as_mut().map(|u| u.focus(state)).is_some() },
-            2 => { self.username.as_mut().map(|u| u.focus(state)).is_some() },
-            3 => { self.password.as_mut().map(|u| u.focus(state)).is_some() },
-            4 => { self.path.focus(state); true},
-            5 => { self.movie.focus(state); true },
-            6 => { self.tv_show.focus(state); true },
-            7 => { self.test.focus(state); true },
-            8 => { self.save.focus(state); true },
-            9 => { self.cancel.focus(state); true },
-            _ => { true },
+            0 => {
+                self.name.focus(state);
+                true
+            }
+            1 => self.host.as_mut().map(|u| u.focus(state)).is_some(),
+            2 => self.username.as_mut().map(|u| u.focus(state)).is_some(),
+            3 => self.password.as_mut().map(|u| u.focus(state)).is_some(),
+            4 => {
+                self.path.focus(state);
+                true
+            }
+            5 => {
+                self.movie.focus(state);
+                true
+            }
+            6 => {
+                self.tv_show.focus(state);
+                true
+            }
+            7 => {
+                self.test.focus(state);
+                true
+            }
+            8 => {
+                self.save.focus(state);
+                true
+            }
+            9 => {
+                self.cancel.focus(state);
+                true
+            }
+            _ => true,
         }
     }
 
     fn input_child(&mut self, index: usize, kev: KeyEvent) -> bool {
         match index {
-            0 => { self.name.input(kev) },
-            1 => { 
+            0 => self.name.input(kev),
+            1 => {
                 let r = self.host.as_mut().map(|u| u.input(kev));
-                return r.is_some() && r.unwrap() 
-            },
-            2 => { 
+                return r.is_some() && r.unwrap();
+            }
+            2 => {
                 let r = self.username.as_mut().map(|u| u.input(kev));
-                return r.is_some() && r.unwrap() 
-            },
-            3 => { 
+                return r.is_some() && r.unwrap();
+            }
+            3 => {
                 let r = self.password.as_mut().map(|u| u.input(kev));
-                return r.is_some() && r.unwrap() 
-            },
-            4 => { self.path.input(kev) },
-            5 => { self.movie.input(kev) },
-            6 => { self.tv_show.input(kev) },
-            7 => { self.test.input(kev) },
-            8 => { self.save.input(kev) },
-            9 => { self.cancel.input(kev) },
-            _ => { false },
+                return r.is_some() && r.unwrap();
+            }
+            4 => self.path.input(kev),
+            5 => self.movie.input(kev),
+            6 => self.tv_show.input(kev),
+            7 => self.test.input(kev),
+            8 => self.save.input(kev),
+            9 => self.cancel.input(kev),
+            _ => false,
         }
     }
 }

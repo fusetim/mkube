@@ -1,8 +1,7 @@
-use std::path::{PathBuf, Path};
-use std::str::FromStr;
-use std::io::{Write, Seek, Read};
 use remotefs::fs::{File, Metadata, ReadStream, UnixPex, Welcome, WriteStream};
 use remotefs::{RemoteError, RemoteErrorType, RemoteFs, RemoteResult};
+use std::io::{Read, Write};
+use std::path::{Path, PathBuf};
 
 #[derive(Clone, Debug)]
 pub struct LocalFs {
@@ -11,9 +10,7 @@ pub struct LocalFs {
 
 impl LocalFs {
     pub fn new(start: PathBuf) -> Self {
-        Self {
-            pwd: start,
-        }
+        Self { pwd: start }
     }
 }
 
@@ -65,7 +62,7 @@ impl RemoteFs for LocalFs {
                 if let Ok(ft) = d.file_type() {
                     if ft.is_dir() || ft.is_file() {
                         Some(self.stat(&d.path()))
-                    } else {    
+                    } else {
                         None
                     }
                 } else {
@@ -82,12 +79,12 @@ impl RemoteFs for LocalFs {
         let metadata = std::fs::symlink_metadata(&path)
             .map_err(|e| RemoteError::new_ex(RemoteErrorType::StatFailed, e))?;
 
-        let file_type = if metadata.file_type().is_dir() { 
-            remotefs::fs::FileType::Directory 
-        } else if metadata.file_type().is_file()  {
-            remotefs::fs::FileType::File 
+        let file_type = if metadata.file_type().is_dir() {
+            remotefs::fs::FileType::Directory
+        } else if metadata.file_type().is_file() {
+            remotefs::fs::FileType::File
         } else {
-            remotefs::fs::FileType::Symlink 
+            remotefs::fs::FileType::Symlink
         };
 
         // TODO: Support Unix Permissions
@@ -102,8 +99,8 @@ impl RemoteFs for LocalFs {
             file_type,
             uid: None,
         };
-        
-        Ok(remotefs::fs::File{
+
+        Ok(remotefs::fs::File {
             path,
             metadata: rfs_mt,
         })
@@ -188,7 +185,8 @@ impl RemoteFs for LocalFs {
         let mut ops = std::fs::OpenOptions::new();
         ops.create(true).write(true).append(true);
 
-        let mut file = ops.open(&path)
+        let mut file = ops
+            .open(&path)
             .map_err(|e| RemoteError::new_ex(RemoteErrorType::FileCreateDenied, e))?;
         std::io::copy(&mut reader, &mut file)
             .map_err(|e| RemoteError::new_ex(RemoteErrorType::IoError, e))
@@ -205,7 +203,8 @@ impl RemoteFs for LocalFs {
         let mut ops = std::fs::OpenOptions::new();
         ops.create(true).write(true).append(false).truncate(true);
 
-        let mut file = ops.open(&path)
+        let mut file = ops
+            .open(&path)
             .map_err(|e| RemoteError::new_ex(RemoteErrorType::FileCreateDenied, e))?;
         std::io::copy(&mut reader, &mut file)
             .map_err(|e| RemoteError::new_ex(RemoteErrorType::IoError, e))
@@ -216,8 +215,9 @@ impl RemoteFs for LocalFs {
         //trace!("opening file at {} for open", path);
         let mut ops = std::fs::OpenOptions::new();
         ops.read(true);
-        
-        let mut file = ops.open(&path)
+
+        let mut file = ops
+            .open(&path)
             .map_err(|e| RemoteError::new_ex(RemoteErrorType::CouldNotOpenFile, e))?;
         std::io::copy(&mut file, &mut dest)
             .map_err(|e| RemoteError::new_ex(RemoteErrorType::IoError, e))

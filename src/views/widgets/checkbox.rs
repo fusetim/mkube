@@ -1,11 +1,11 @@
+use crossterm::event::{KeyCode, KeyEvent};
 use tui::{
-    style::{Style, Color, Modifier}, 
-    widgets::{Paragraph, StatefulWidget, Widget, Wrap},
-    layout::{Rect,Layout, Constraint, Direction},
-    text::{Span, Spans},
     buffer::Buffer,
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
+    text::{Span, Spans},
+    widgets::{Paragraph, StatefulWidget, Widget},
 };
-use crossterm::event::{KeyEvent, KeyCode, KeyModifiers};
 
 #[derive(Clone, Debug)]
 pub struct Checkbox {
@@ -37,17 +37,17 @@ impl Default for Checkbox {
 
 impl Checkbox {
     pub fn with_style(mut self, check: Style, brackets: Style) -> Self {
-        self.normal_style = (check,brackets);
+        self.normal_style = (check, brackets);
         self
     }
 
     pub fn with_focus_style(mut self, check: Style, brackets: Style) -> Self {
-        self.focused_style = (check,brackets);
+        self.focused_style = (check, brackets);
         self
     }
 
     pub fn with_disabled_style(mut self, check: Style, brackets: Style) -> Self {
-        self.disabled_style = (check,brackets);
+        self.disabled_style = (check, brackets);
         self
     }
 }
@@ -91,23 +91,13 @@ impl StatefulWidget for Checkbox {
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let rows = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(
-            [
-                Constraint::Min(1),
-                Constraint::Percentage(100),
-            ].as_ref()
-        )
-        .split(area.clone());
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(1), Constraint::Percentage(100)].as_ref())
+            .split(area.clone());
         let chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints(
-            [
-                Constraint::Length(3),
-                Constraint::Percentage(100),
-            ].as_ref()
-        )
-        .split(rows[0]);
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Length(3), Constraint::Percentage(100)].as_ref())
+            .split(rows[0]);
 
         let (check_style, bracket_style) = if state.disabled {
             self.disabled_style

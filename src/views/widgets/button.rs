@@ -1,11 +1,10 @@
+use crossterm::event::{KeyCode, KeyEvent};
 use tui::{
-    style::{Style, Color, Modifier}, 
-    widgets::{Paragraph, StatefulWidget, Widget, Wrap},
-    layout::{Rect,Layout, Constraint, Direction},
-    text::{Span, Spans},
     buffer::Buffer,
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
+    widgets::{Paragraph, StatefulWidget, Widget},
 };
-use crossterm::event::{KeyEvent, KeyCode, KeyModifiers};
 
 use crate::util::{OwnedSpan, OwnedSpans};
 
@@ -42,10 +41,11 @@ pub struct ButtonState {
     pub disabled: bool,
 }
 
-
 impl Button {
-    pub fn new<T>(text: T) -> Self 
-    where T: Into<OwnedSpans> {
+    pub fn new<T>(text: T) -> Self
+    where
+        T: Into<OwnedSpans>,
+    {
         let focused_style = Style::default().bg(Color::LightRed);
         let normal_style = Style::default().bg(Color::White);
         let clicked_style = Style::default().add_modifier(Modifier::BOLD);
@@ -74,8 +74,10 @@ impl Button {
         self
     }
 
-    pub fn with_text<T>(mut self, text: T) -> Self 
-    where T: Into<OwnedSpans> {
+    pub fn with_text<T>(mut self, text: T) -> Self
+    where
+        T: Into<OwnedSpans>,
+    {
         self.text = text.into();
         self
     }
@@ -125,23 +127,19 @@ impl StatefulWidget for Button {
         let content = OwnedSpans::from(spans);
 
         let rows = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(
-            [
-                Constraint::Min(1),
-                Constraint::Percentage(100),
-            ].as_ref()
-        )
-        .split(area.clone());
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(1), Constraint::Percentage(100)].as_ref())
+            .split(area.clone());
         let chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints(
-            [
-                Constraint::Length(content.width() as u16),
-                Constraint::Percentage(100),
-            ].as_ref()
-        )
-        .split(rows[0]);
+            .direction(Direction::Horizontal)
+            .constraints(
+                [
+                    Constraint::Length(content.width() as u16),
+                    Constraint::Percentage(100),
+                ]
+                .as_ref(),
+            )
+            .split(rows[0]);
 
         let style = if state.disabled {
             self.disabled_style
@@ -153,7 +151,9 @@ impl StatefulWidget for Button {
 
         let style = if state.clicked {
             style.patch(self.clicked_style)
-        } else { style };
+        } else {
+            style
+        };
 
         let par = Paragraph::new(content).style(style);
 

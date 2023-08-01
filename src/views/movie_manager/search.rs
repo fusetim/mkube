@@ -1,18 +1,19 @@
-use tui::{
-    style::{Style, Color, Modifier},
-    buffer::Buffer,
-    layout::{Constraint, Rect, Direction, Layout},
-    widgets::{StatefulWidget, Widget, Table, TableState, Row, Cell, Paragraph, Block, Borders, BorderType},
-};
 use crossterm::event::KeyCode;
-use tmdb_api::movie::MovieShort;
 use std::path::PathBuf;
+use tmdb_api::movie::MovieShort;
+use tui::{
+    buffer::Buffer,
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Modifier, Style},
+    widgets::{
+        Block, BorderType, Borders, Paragraph, Row, StatefulWidget, Table, TableState, Widget,
+    },
+};
 
-use crate::{AppEvent, AppState, AppMessage};
-use crate::nfo::{Movie};
 use crate::views::movie_manager::{MovieManagerEvent, MovieManagerMessage};
-use crate::views::widgets::{Input, Button, InputState, ButtonState};
+use crate::views::widgets::{Button, ButtonState, Input, InputState};
 use crate::MESSAGE_SENDER;
+use crate::{AppEvent, AppMessage};
 
 #[derive(Clone, Debug)]
 pub struct MovieSearch {
@@ -30,7 +31,6 @@ impl Default for MovieSearch {
         }
     }
 }
-
 
 #[derive(Clone, Debug, Default)]
 pub struct MovieSearchState {
@@ -50,22 +50,25 @@ impl StatefulWidget for MovieSearch {
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let chunks = Layout::default()
             .direction(Direction::Vertical)
-            .constraints(vec![
-                Constraint::Min(1),
-                Constraint::Percentage(100),
-            ]).split(area);
+            .constraints(vec![Constraint::Min(1), Constraint::Percentage(100)])
+            .split(area);
         let search_bar = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![
                 Constraint::Length(chunks[0].width - 10),
                 Constraint::Min(2),
                 Constraint::Min(8),
-            ]).split(chunks[0]);
-        let mut search_block = Block::default()
+            ])
+            .split(chunks[0]);
+        let search_block = Block::default()
             .borders(Borders::LEFT | Borders::RIGHT)
-            .border_style(Style::default().fg(if state.selected == 2 { Color::LightRed } else { Color::Gray }))
-            .border_type(BorderType::Rounded); 
-        let inner = search_block.inner(chunks[1].clone());  
+            .border_style(Style::default().fg(if state.selected == 2 {
+                Color::LightRed
+            } else {
+                Color::Gray
+            }))
+            .border_type(BorderType::Rounded);
+        let inner = search_block.inner(chunks[1].clone());
 
         state.query_state.set_focus(state.selected == 0);
         state.send_state.focus(state.selected == 1);
@@ -77,23 +80,42 @@ impl StatefulWidget for MovieSearch {
         } else if state.results.len() == 0 {
             Paragraph::new("No result found.").render(inner, buf);
         } else {
-            let rows : Vec<_> = state.results.iter()
+            let rows: Vec<_> = state
+                .results
+                .iter()
                 .map(|m| {
-                    let yr = m.inner.release_date.map(|rd| rd.format("%Y").to_string()).unwrap_or("".into());
+                    let yr = m
+                        .inner
+                        .release_date
+                        .map(|rd| rd.format("%Y").to_string())
+                        .unwrap_or("".into());
                     Row::new(vec![m.inner.title.clone(), yr, m.inner.overview.clone()])
                 })
                 .collect();
-            
+
             let table = Table::new(rows)
                 .style(Style::default().fg(Color::White))
                 .header(
                     Row::new(vec!["Title", "Year", "Overview"])
-                        .style(Style::default().bg(Color::Blue).fg(Color::Black).add_modifier(Modifier::BOLD))
-                        .bottom_margin(1)
+                        .style(
+                            Style::default()
+                                .bg(Color::Blue)
+                                .fg(Color::Black)
+                                .add_modifier(Modifier::BOLD),
+                        )
+                        .bottom_margin(1),
                 )
-                .widths(&[Constraint::Length(50), Constraint::Length(4), Constraint::Percentage(100)])
+                .widths(&[
+                    Constraint::Length(50),
+                    Constraint::Length(4),
+                    Constraint::Percentage(100),
+                ])
                 .column_spacing(1)
-                .highlight_style(Style::default().bg(if state.selected == 2 { Color::LightRed } else { Color::Gray }));
+                .highlight_style(Style::default().bg(if state.selected == 2 {
+                    Color::LightRed
+                } else {
+                    Color::Gray
+                }));
             StatefulWidget::render(table, inner, buf, &mut state.table_state);
         }
     }
@@ -106,13 +128,27 @@ impl MovieSearchState {
                 if kev.code == KeyCode::Enter {
                     if self.selected == 0 || self.selected == 1 {
                         let sender = MESSAGE_SENDER.get().unwrap();
-                        sender.send(AppMessage::MovieManagerMessage(MovieManagerMessage::SearchTitle(self.query_state.get_value().to_owned()))).unwrap();
+                        sender
+                            .send(AppMessage::MovieManagerMessage(
+                                MovieManagerMessage::SearchTitle(
+                                    self.query_state.get_value().to_owned(),
+                                ),
+                            ))
+                            .unwrap();
                         self.is_loading = true;
                         true
                     } else if self.selected == 2 {
                         if let Some(index) = self.table_state.selected() {
                             let sender = MESSAGE_SENDER.get().unwrap();
-                            sender.send(AppMessage::MovieManagerMessage(MovieManagerMessage::SaveNfo((self.results[index].inner.id, self.movie_fs_id, self.movie_path.clone())))).unwrap();
+                            sender
+                                .send(AppMessage::MovieManagerMessage(
+                                    MovieManagerMessage::SaveNfo((
+                                        self.results[index].inner.id,
+                                        self.movie_fs_id,
+                                        self.movie_path.clone(),
+                                    )),
+                                ))
+                                .unwrap();
                             return true;
                         }
                         false
@@ -120,10 +156,20 @@ impl MovieSearchState {
                         false
                     }
                 } else if self.selected == 2 && kev.code == KeyCode::Up && self.results.len() > 0 {
-                    self.table_state.select(self.table_state.selected().map(|c| (c + self.results.len() - 1) % self.results.len()));
+                    self.table_state.select(
+                        self.table_state
+                            .selected()
+                            .map(|c| (c + self.results.len() - 1) % self.results.len()),
+                    );
                     true
-                } else if self.selected == 2 && kev.code == KeyCode::Down && self.results.len() > 0 {
-                    self.table_state.select(self.table_state.selected().map(|c| (c + 1) % self.results.len()).or(Some(0)));
+                } else if self.selected == 2 && kev.code == KeyCode::Down && self.results.len() > 0
+                {
+                    self.table_state.select(
+                        self.table_state
+                            .selected()
+                            .map(|c| (c + 1) % self.results.len())
+                            .or(Some(0)),
+                    );
                     true
                 } else if kev.code == KeyCode::Tab {
                     self.selected = (self.selected + 1) % 3;
@@ -140,14 +186,14 @@ impl MovieSearchState {
                         false
                     }
                 }
-            },
+            }
             AppEvent::MovieManagerEvent(MovieManagerEvent::SearchResults(results)) => {
                 self.results = results;
                 self.table_state.select(None);
                 self.is_loading = false;
                 true
-            },
-            _ => { false },
+            }
+            _ => false,
         }
     }
 }

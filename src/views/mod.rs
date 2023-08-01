@@ -1,32 +1,36 @@
-use tui::widgets::{StatefulWidget, Widget, Block, Tabs, Borders, BorderType};
-use tui::{
-    backend::{Backend},
-    layout::{Rect, Constraint, Direction, Layout},
-    Frame,
-    symbols::DOT,
-    text::{Span, Spans},
-    style::{Style, Color},
-    buffer::Buffer,
-};
-use std::pin::Pin;
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use std::future::Future;
-use crossterm::event::{KeyEvent, KeyCode, KeyModifiers};
+use std::pin::Pin;
+use tui::widgets::{Block, Borders, StatefulWidget, Tabs, Widget};
+use tui::{
+    buffer::Buffer,
+    layout::{Constraint, Direction, Layout, Rect},
+    style::{Color, Style},
+    symbols::DOT,
+    text::Spans,
+};
 
 pub mod movie_manager;
 pub mod settings;
 pub mod widgets;
 
-use crate::multifs::{MultiFs};
 use crate::library::Library;
-use settings::{SettingsPage, SettingsState, SettingsMessage};
-use movie_manager::{MovieManagerMessage, MovieManagerEvent, MovieManager, MovieManagerState};
+use crate::multifs::MultiFs;
+use movie_manager::{MovieManager, MovieManagerEvent, MovieManagerMessage, MovieManagerState};
+use settings::{SettingsMessage, SettingsPage, SettingsState};
 
 pub enum AppMessage {
-    Future(Box<dyn FnOnce(&mut AppState) -> Pin<Box<dyn Future<Output=Option<AppEvent>>>> + Send + Sync>),
+    Future(
+        Box<
+            dyn FnOnce(&mut AppState) -> Pin<Box<dyn Future<Output = Option<AppEvent>>>>
+                + Send
+                + Sync,
+        >,
+    ),
     TriggerEvent(AppEvent),
     SettingsMessage(SettingsMessage),
     MovieManagerMessage(MovieManagerMessage),
-    Close,    
+    Close,
 }
 
 impl std::fmt::Debug for AppMessage {
@@ -36,7 +40,9 @@ impl std::fmt::Debug for AppMessage {
             AppMessage::Future(_) => write!(f, "AppMessage::Future(<builder>)"),
             AppMessage::TriggerEvent(evt) => write!(f, "AppMessage::TriggerEvent({:?})", evt),
             AppMessage::SettingsMessage(msg) => write!(f, "AppMessage::SettingsMessage({:?})", msg),
-            AppMessage::MovieManagerMessage(msg) => write!(f, "AppMessage::MovieManagerMessage({:?})", msg),
+            AppMessage::MovieManagerMessage(msg) => {
+                write!(f, "AppMessage::MovieManagerMessage({:?})", msg)
+            }
         }
     }
 }
@@ -68,21 +74,20 @@ impl Default for TabState {
     }
 }
 
-
 #[derive(Default)]
 pub struct AppState {
     pub tab: TabState,
     pub saved_movie_state: Option<MovieManagerState>,
     pub frame_number: usize,
     pub events: Vec<AppEvent>,
-    pub libraries: Vec<Library>, 
+    pub libraries: Vec<Library>,
     pub conns: Vec<MultiFs>,
 }
 
 impl AppState {
     pub fn tick(&mut self) {
         self.frame_number += 1;
-    } 
+    }
 
     pub fn register_event(&mut self, evt: AppEvent) -> bool {
         self.events.push(evt.clone());
@@ -95,23 +100,31 @@ impl AppState {
                     self.tab = TabState::Settings(Default::default());
                     use crate::MESSAGE_SENDER;
                     let sender = MESSAGE_SENDER.get().unwrap();
-                    sender.send(crate::AppMessage::Future(Box::new(|appstate: &mut AppState| {
-                        let libs = appstate.libraries.clone(); 
-                        Box::pin(async move {
-                            Some(AppEvent::SettingsEvent(settings::SettingsEvent::OpenMenu(libs)))
-                    })}))).unwrap();
+                    sender
+                        .send(crate::AppMessage::Future(Box::new(
+                            |appstate: &mut AppState| {
+                                let libs = appstate.libraries.clone();
+                                Box::pin(async move {
+                                    Some(AppEvent::SettingsEvent(
+                                        settings::SettingsEvent::OpenMenu(libs),
+                                    ))
+                                })
+                            },
+                        )))
+                        .unwrap();
                     true
                 } else if kev.code == KeyCode::Char('h') && kev.modifiers == KeyModifiers::ALT {
-                    self.tab = TabState::MovieManager(self.saved_movie_state.clone().unwrap_or_default());
+                    self.tab =
+                        TabState::MovieManager(self.saved_movie_state.clone().unwrap_or_default());
                     true
                 } else if let TabState::Settings(ref mut state) = self.tab {
                     state.press_key(kev.clone())
-                }else if let TabState::MovieManager(ref mut state) = self.tab {
+                } else if let TabState::MovieManager(ref mut state) = self.tab {
                     state.input(evt.clone())
                 } else {
                     false
                 }
-            },
+            }
             _ => {
                 if let TabState::Settings(ref mut sstate) = self.tab {
                     sstate.input(evt)
@@ -140,17 +153,16 @@ impl StatefulWidget for App {
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
         let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .margin(0)
-        .constraints(
-            [
-                Constraint::Length(3),
-                Constraint::Percentage(90),
-            ].as_ref()
-        )
-        .split(area.clone());
+            .direction(Direction::Vertical)
+            .margin(0)
+            .constraints([Constraint::Length(3), Constraint::Percentage(90)].as_ref())
+            .split(area.clone());
 
-        let titles = ["Home (Alt+H)", "Settings (Alt+S)"].iter().cloned().map(Spans::from).collect();
+        let titles = ["Home (Alt+H)", "Settings (Alt+S)"]
+            .iter()
+            .cloned()
+            .map(Spans::from)
+            .collect();
         let tabs = Tabs::new(titles)
             .block(Block::default().title("MKube").borders(Borders::ALL))
             .style(Style::default().fg(Color::White))
@@ -171,12 +183,11 @@ impl StatefulWidget for App {
         match state.tab {
             TabState::Settings(ref mut state) => {
                 self.settings_page.render(chunks[1], buf, state);
-            },
+            }
             TabState::MovieManager(ref mut state) => {
                 self.movie_manager.render(chunks[1], buf, state);
             }
         }
-        tabs.render(chunks[0], buf);   
+        tabs.render(chunks[0], buf);
     }
 }
-
