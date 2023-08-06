@@ -23,12 +23,17 @@ use multifs::MultiFs;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    init_logger().await;
+    log::info!("Hello!");
+
     // setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
+
+    log::info!("Terminal successfully prepared!");
 
     match run(&mut terminal).await {
         Ok(()) => {
@@ -48,7 +53,22 @@ async fn main() -> Result<()> {
     )?;
     terminal.show_cursor()?;
 
+    log::info!("Terminal successfully restored!");
+
     Ok(())
+}
+
+async fn init_logger() {
+    use structured_logger::{async_json::new_writer, Builder};
+    let log_file = tokio::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("mkube.log")
+        .await
+        .unwrap();
+    Builder::new()
+        .with_default_writer(new_writer(log_file))
+        .init();
 }
 
 async fn run<B>(terminal: &mut Terminal<B>) -> Result<()>
@@ -125,7 +145,7 @@ where
                         },
                         AppMessage::SettingsMessage(SettingsMessage::SaveLibrary(lib)) => {
                             if let Ok(mut conn) = MultiFs::try_from(&lib) {
-                                let _ = conn.as_mut_rfs().connect();
+                                if !conn.as_mut_rfs().is_connected() { let _ = conn.as_mut_rfs().connect(); }
                                 state.conns.push(conn);
                                 state.libraries.push(lib);
                             }
@@ -133,6 +153,7 @@ where
                         },
                         AppMessage::SettingsMessage(SettingsMessage::TestLibrary(lib)) => {
                             let rst = if let Ok(mut conn) = MultiFs::try_from(&lib) {
+                                let _ = conn.as_mut_rfs().connect();
                                 (conn.as_mut_rfs().is_connected(), conn.as_mut_rfs().exists(&lib.path.as_path()).unwrap_or(false))
                             } else {
                                 (false, false)

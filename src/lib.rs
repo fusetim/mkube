@@ -88,12 +88,15 @@ pub async fn analyze_library(
                 && VIDEO_EXTENSIONS
                     .contains(&entry.path().extension().unwrap().to_string_lossy().as_ref())
             {
-                //println!("Found {}!", entry.path().display());
+                log::debug!("Found {}!", entry.path().display());
                 video_paths.push(entry.path().to_owned());
             } else {
-                //println!("Ignored {} (not a video container)!", entry.path().display());
+                log::debug!("Ignored {} (not a video container)!", entry.path().display());
             }
         } else if entry.is_dir() {
+            if entry.path().ends_with(".") || entry.path().ends_with("..") {
+                continue;
+            }
             let no_media = entry.path().join("./.nomedia");
             if lfs.as_mut_rfs().exists(&no_media).map_err(|err| {
                 anyhow!(
@@ -102,13 +105,13 @@ pub async fn analyze_library(
                     err
                 )
             })? {
-                //println!("Ignoring entry {} (.nomedia).", entry.path().display());
+                log::info!("Ignoring entry {} (.nomedia).", entry.path().display());
             } else if depth > 0 {
                 let sub = analyze_library(lfs, entry.path().to_owned(), depth - 1).await?;
                 video_paths.extend(sub);
             }
         } else {
-            //println!("Ignoring entry {} (symlink).", entry.path().display());
+            log::debug!("Ignoring entry {} (symlink).", entry.path().display());
         }
     }
     Ok(video_paths)

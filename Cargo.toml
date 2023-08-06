@@ -25,6 +25,8 @@ urlencoding = "2"
 futures-util = "0.3"
 unicode-width = "^0.1"
 unicode-segmentation = "1.9.0"
+log = { version = "0.4", features = ["std", "serde"] }
+structured-logger = "1"
 
 [features]
 default = ["ftp", "smb"]
