@@ -27,6 +27,7 @@ unicode-width = "^0.1"
 unicode-segmentation = "1.9.0"
 log = { version = "0.4", features = ["std", "serde"] }
 structured-logger = "1"
+confy = "0.5.1"
 
 [features]
 default = ["ftp", "smb"]

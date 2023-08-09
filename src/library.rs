@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use url::Url;
+use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "ftp")]
 use remotefs_ftp::client::FtpFs;
@@ -9,7 +10,7 @@ use remotefs_smb::{SmbCredentials, SmbFs, SmbOptions};
 use crate::localfs::LocalFs;
 use crate::multifs::MultiFs;
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Deserialize, Serialize)]
 pub enum LibraryType {
     #[default]
     Local,
@@ -19,7 +20,7 @@ pub enum LibraryType {
     Smb,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub enum LibraryFlavor {
     Movie,
     TvShow,
@@ -37,7 +38,7 @@ impl LibraryType {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
 pub struct Library {
     pub fs_type: LibraryType,
     pub flavor: LibraryFlavor,

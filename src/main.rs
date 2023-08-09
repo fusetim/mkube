@@ -21,6 +21,9 @@ use mkube::views;
 
 use multifs::MultiFs;
 
+const APP_NAME: &'static str = "mkube";
+const CONFIG_NAME: Option<&'static str> = Some("config");
+
 #[tokio::main]
 async fn main() -> Result<()> {
     init_logger().await;
@@ -80,6 +83,7 @@ where
     mkube::MESSAGE_SENDER
         .set(sender)
         .map_err(|err| anyhow!("Failed to init MESSAGE_SENDER, causes:\n{:?}", err))?;
+    let mut cfg : mkube::config::Configuration = confy::load(APP_NAME, CONFIG_NAME)?;
     let app = views::App {
         settings_page: views::settings::SettingsPage::new(),
         movie_manager: Default::default(),
@@ -88,6 +92,15 @@ where
     let mut event_reader = EventStream::new();
     let tick = time::interval(Duration::from_millis(1000 / 15));
     tokio::pin!(tick);
+
+    // Load libraries from config.
+    for lib in &cfg.libraries {
+        if let Ok(mut conn) = MultiFs::try_from(lib) {
+            if !conn.as_mut_rfs().is_connected() { let _ = conn.as_mut_rfs().connect(); }
+            state.conns.push(conn);
+            state.libraries.push(lib.clone());
+        }
+    }
 
     loop {
         let event = event_reader.next().fuse();
@@ -147,7 +160,9 @@ where
                             if let Ok(mut conn) = MultiFs::try_from(&lib) {
                                 if !conn.as_mut_rfs().is_connected() { let _ = conn.as_mut_rfs().connect(); }
                                 state.conns.push(conn);
-                                state.libraries.push(lib);
+                                state.libraries.push(lib.clone());
+                                cfg.libraries.push(lib);
+                                let _ = confy::store(APP_NAME, CONFIG_NAME, &cfg);
                             }
                             state.register_event(AppEvent::SettingsEvent(SettingsEvent::OpenMenu(state.libraries.clone())));
                         },
@@ -183,7 +198,9 @@ where
                         AppMessage::MovieManagerMessage(MovieManagerMessage::SearchTitle(title)) => {
                             use tmdb_api::movie::search::MovieSearch;
                             use tmdb_api::prelude::Command;
-                            let ms = MovieSearch::new(title);
+                            let ms = MovieSearch::new(title)
+                                .with_language(Some(cfg.tmdb_preferences.prefered_lang.clone()))
+                                .with_region(Some(cfg.tmdb_preferences.prefered_country.clone()));
                             if let Ok(results) = ms.execute(&tmdb_client).await {
                                 state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::SearchResults(results.results)));
                             } else {
@@ -193,7 +210,7 @@ where
                         AppMessage::MovieManagerMessage(MovieManagerMessage::SaveNfo((id, fs_id, mut path))) => {
                             use std::io::Cursor;
                             use std::io::Seek;
-                            let mut movie_nfo = mkube::transform_as_nfo(&tmdb_client, id, Some("fr".to_owned())).await?;
+                            let mut movie_nfo = mkube::transform_as_nfo(&tmdb_client, id, Some(cfg.tmdb_preferences.prefered_lang.clone())).await?;
                             let mt = mkube::get_metadata(&mut state.conns[fs_id], (&state.libraries[fs_id]).try_into().expect("Cannot get a baseURL from library."), path.clone()).await?;
                             movie_nfo.fileinfo = Some(mt);
                             let nfo_string = quick_xml::se::to_string(&movie_nfo).expect("Failed to produce a valid nfo file.");
