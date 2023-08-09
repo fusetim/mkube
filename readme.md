@@ -16,10 +16,10 @@ today or in the future :
 - [x] Movie search (using TheMovieDB)
 - [x] Metadata retrieval (using ffmpeg)
 - [x] NFO generation (for Kodi only)
+- [x] Persistent configuration
 - [ ] Movie details 
 - [ ] Artwork retrievals
 - [ ] TV Show support
-- [ ] Persistent configuration
 
 ## Build & Run
 
