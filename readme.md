@@ -62,9 +62,9 @@ Some good media managers exist, like [tinyMediaManager](https://tinymediamanager
 lack features or enforce to buy premium version to access all their features, including 
 some essential ones. MKube is an attempt to resolve this issue I had myself.
 
-## Licencing
+## Licensing
 
-***To Be Done:*** *If needed, please contact me. I have not figured this out for the moment but 
-certainly will licence this software under GPLv3*
+Licensed under the **EUPL v. 1.2 only**.  
+*Note that the EUPL v1.2 license is compatible with many other recognized licenses (see appendix).*
 
 Fusetim (2023) - All rights reserved.
