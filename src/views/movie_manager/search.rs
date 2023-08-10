@@ -48,10 +48,17 @@ impl StatefulWidget for MovieSearch {
     type State = MovieSearchState;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
+        let mut block = Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(Color::White))
+            .border_type(BorderType::Rounded)
+            .title(" Movies ");
+        let inner = block.inner(area.clone());
+        block.render(area, buf);
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints(vec![Constraint::Min(1), Constraint::Percentage(100)])
-            .split(area);
+            .split(inner);
         let search_bar = Layout::default()
             .direction(Direction::Horizontal)
             .constraints(vec![

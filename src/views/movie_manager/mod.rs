@@ -52,23 +52,15 @@ impl StatefulWidget for MovieManager {
     type State = MovieManagerState;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        let mut block = Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::White))
-            .border_type(BorderType::Rounded);
-        let inner = block.inner(area.clone());
         match state {
             MovieManagerState::Table(ref mut state) => {
-                block = block.title(" Movies ");
-                StatefulWidget::render(self.table, inner, buf, state);
+                StatefulWidget::render(self.table, area, buf, state);
             }
             MovieManagerState::Search(ref mut state) => {
-                block = block.title(" Search ");
-                StatefulWidget::render(self.search, inner, buf, state);
+                StatefulWidget::render(self.search, area, buf, state);
             }
             _ => {}
         }
-        Widget::render(block, area, buf);
     }
 }
 
