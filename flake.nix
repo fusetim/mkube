@@ -1,5 +1,5 @@
 {
-  description = "Build a cargo project";
+  description = "Minimalist Media Manager (mkube)";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -90,6 +90,15 @@
           nativeBuildInputs = [ pkgs.pkg-config ];
 
           buildInputs = commonArgs.buildInputs ++ [];
+
+          meta = with lib; {
+            description = "Minimalist Media Manager (M³) - Rust minimalist TUI to manage your remote mediacenter.";
+            longDescription = ''
+              Minimalist Media Manager (M³) - Rust minimalist TUI to manage your remote mediacenter. 
+            '';
+            homepage = "https://github.com/fusetim/mkube/";
+            license = licenses.eupl12;
+          };
         });
       in
       {
