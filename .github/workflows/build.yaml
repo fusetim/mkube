@@ -8,22 +8,22 @@ jobs:
     steps:
     - name: "Checkout"
       uses: actions/checkout@v3
-    - name: "Cache Nix store"
-      uses: actions/cache@v3.3.1
-      id: nix-cache
-      with:
-        path: /tmp/nixcache
-        key: "${{ runner.os }}-${{ hashFiles('Cargo.toml') }}"
+#   - name: "Cache Nix store"
+#     uses: actions/cache@v3.3.1
+#     id: nix-cache
+#     with:
+#       path: /tmp/nixcache
+#       key: "${{ runner.os }}-${{ hashFiles('Cargo.toml') }}"
     - name: "Install Nix"
       uses: cachix/install-nix-action@v22
       with:
         github_access_token: ${{ secrets.GITHUB_TOKEN }}
-    - name: "Import Nix store cache"
-      if: "steps.nix-cache.outputs.cache-hit == 'true'"
-      run: "nix-store --import < /tmp/nixcache"
+#   - name: "Import Nix store cache"
+#     if: "steps.nix-cache.outputs.cache-hit == 'true'"
+#     run: "nix-store --import < /tmp/nixcache"
     - name: "Build app"
       run: nix build
-    - name: "Export Nix store cache"
-      if: "steps.nix-cache.outputs.cache-hit != 'true'"
-      run: "nix-store --export $(find /nix/store -maxdepth 1 -name '*-*') > /tmp/nixcache"
+#   - name: "Export Nix store cache"
+#     if: "steps.nix-cache.outputs.cache-hit != 'true'"
+#     run: "nix-store --export $(find /nix/store -maxdepth 1 -name '*-*') > /tmp/nixcache"
 #   - run: nix flake check
