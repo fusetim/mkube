@@ -114,13 +114,13 @@ impl MovieTableState {
         match app_event {
             AppEvent::KeyEvent(kev) => {
                 if kev.code == KeyCode::Char('r') && (!self.is_loading) {
+                    self.is_loading = true;
                     let sender = MESSAGE_SENDER.get().unwrap();
                     sender
                         .send(AppMessage::MovieManagerMessage(
                             MovieManagerMessage::RefreshMovies,
                         ))
                         .unwrap();
-                    self.is_loading = true;
                     true
                 } else if kev.code == KeyCode::Up && self.movies.len() > 0 {
                     self.table_state.select(

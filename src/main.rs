@@ -41,10 +41,10 @@ async fn main() -> Result<()> {
 
     match run(&mut terminal).await {
         Ok(()) => {
-            println!("Exit success.");
+            log::info!("Exit success.");
         }
         Err(err) => {
-            eprintln!("Exit failed, caused:\n{:?}", err);
+            log::error!("Exit failed, caused:\n{:?}", err);
         }
     }
 
@@ -155,6 +155,7 @@ where
                         AppMessage::SettingsMessage(SettingsMessage::EditExisting(lib)) => {
                             if let Some((ind, _)) = state.libraries.iter().enumerate().filter(|(_, l)| &&lib == l).next() {
                                 let l = state.libraries.swap_remove(ind);
+                                let _ = cfg.libraries.swap_remove(ind);
                                 let _ = state.conns.swap_remove(ind);
                                 state.register_event(AppEvent::SettingsEvent(SettingsEvent::EditExisting(l)));
                             } else {
@@ -235,6 +236,7 @@ where
                             let mt = mkube::get_metadata(&mut state.conns[fs_id], (&state.libraries[fs_id]).try_into().expect("Cannot get a baseURL from library."), path.clone()).await?;
                             movie_nfo.fileinfo = Some(mt);
                             let nfo_string = quick_xml::se::to_string(&movie_nfo).expect("Failed to produce a valid nfo file.");
+                            let movie_path= path.clone();
 
                             path.set_extension("nfo");
                             let mut buf = Cursor::new(Vec::new());
@@ -243,6 +245,8 @@ where
                             let _ = buf.rewind();
                             let _ = state.conns[fs_id].as_mut_rfs().create_file(&path, &Metadata::default(), Box::new(buf))
                                 .map_err(|err| anyhow!("Can't open the nfo file., causes:\n{:?}", err))?;
+                            state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::OpenTable)); 
+                            state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::MovieUpdated((movie_nfo, fs_id, movie_path)))); 
                         },
                         AppMessage::Close => {
                             break;
@@ -254,6 +258,10 @@ where
                 }
             }
         }
+    }
+
+    if let Err(err) = confy::store(APP_NAME, CONFIG_NAME, &cfg) {
+        log::error!("Failed to save configuration, causes:\n{:?}", err);
     }
 
     Ok(())

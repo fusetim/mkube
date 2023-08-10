@@ -19,7 +19,7 @@ pub struct MovieManager {
 #[derive(Clone, Debug)]
 pub enum MovieManagerState {
     Table(MovieTableState),
-    Search(MovieSearchState),
+    Search(MovieTableState, MovieSearchState),
 }
 
 impl Default for MovieManagerState {
@@ -35,6 +35,7 @@ pub enum MovieManagerEvent {
     MovieUpdated((crate::nfo::Movie, usize, PathBuf)),
     SearchMovie((crate::nfo::Movie, usize, PathBuf)),
     SearchResults(Vec<tmdb_api::movie::MovieShort>),
+    OpenTable,
 }
 #[derive(Clone, Debug, PartialEq)]
 pub enum MovieManagerMessage {
@@ -51,7 +52,7 @@ impl StatefulWidget for MovieManager {
             MovieManagerState::Table(ref mut state) => {
                 StatefulWidget::render(self.table, area, buf, state);
             }
-            MovieManagerState::Search(ref mut state) => {
+            MovieManagerState::Search(_, ref mut state) => {
                 StatefulWidget::render(self.search, area, buf, state);
             }
             _ => {}
@@ -76,19 +77,26 @@ impl MovieManagerState {
                         query_state,
                         ..Default::default()
                     };
-                    *self = MovieManagerState::Search(new_state);
+                    *self = MovieManagerState::Search(state.clone(), new_state);
                     true
                 }
                 _ => state.input(app_event),
             },
-            MovieManagerState::Search(ref mut state) => {
+            MovieManagerState::Search(ref mut table_state, ref mut state) => {
                 if let AppEvent::KeyEvent(kev) = app_event {
                     if kev.code == KeyCode::Esc {
-                        *self = Default::default();
+                        *self = MovieManagerState::Table(table_state.clone());
                         true
                     } else {
                         state.input(app_event)
                     }
+                } else if let AppEvent::MovieManagerEvent(MovieManagerEvent::MovieUpdated(..)) = app_event {
+                    table_state.input(app_event)  
+                } else if let AppEvent::MovieManagerEvent(MovieManagerEvent::MovieDiscovered(..)) = app_event {
+                    table_state.input(app_event)  
+                } else if let AppEvent::MovieManagerEvent(MovieManagerEvent::OpenTable) = app_event {
+                    *self = MovieManagerState::Table(table_state.clone());
+                    true
                 } else {
                     state.input(app_event)
                 }
