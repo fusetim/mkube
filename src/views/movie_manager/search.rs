@@ -10,7 +10,9 @@ use tui::{
     },
 };
 
-use crate::views::movie_manager::{MovieManagerEvent, MovieManagerMessage};
+use crate::views::movie_manager::{
+    details::MovieSearchDetails, MovieManagerEvent, MovieManagerMessage,
+};
 use crate::views::widgets::{Button, ButtonState, Input, InputState};
 use crate::MESSAGE_SENDER;
 use crate::{AppEvent, AppMessage};
@@ -48,13 +50,30 @@ impl StatefulWidget for MovieSearch {
     type State = MovieSearchState;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        let mut block = Block::default()
+        let block = Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::White))
             .border_type(BorderType::Rounded)
-            .title(" Movies ");
-        let inner = block.inner(area.clone());
-        block.render(area, buf);
+            .title(" Search ");
+        let mut search_chunk = area.clone();
+        if area.height > 14 {
+            if let Some(movie) = state.table_state.selected() {
+                let chunks = Layout::default()
+                    .direction(Direction::Vertical)
+                    .constraints(vec![
+                        Constraint::Min(area.height - 8),
+                        Constraint::Percentage(100),
+                    ])
+                    .split(area.clone());
+                search_chunk = chunks[0];
+                MovieSearchDetails {
+                    movie: &state.results[movie],
+                }
+                .render(chunks[1], buf);
+            }
+        }
+        let inner = block.inner(search_chunk.clone());
+        block.render(search_chunk, buf);
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints(vec![Constraint::Min(1), Constraint::Percentage(100)])

@@ -17,7 +17,8 @@ today or in the future :
 - [x] Metadata retrieval (using ffmpeg)
 - [x] NFO generation (for Kodi only)
 - [x] Persistent configuration
-- [ ] Movie details 
+- [x] Movie details 
+- [ ] Movie Editor
 - [ ] Artwork retrievals
 - [ ] TV Show support
 
@@ -55,6 +56,10 @@ enable flakes (experimental-features) before building MKube using
 
 Note: For developement, you should prefer to run `nix develop` to create a shell 
 adapted to rust development.
+
+## Showcase
+
+![mkube](/docs/mkube_demo_2023-08-10.png)
 
 ## Inspirations
 The Linux community is lacking a good media manager, that can support remote libraries.

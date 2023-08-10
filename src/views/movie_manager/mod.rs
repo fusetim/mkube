@@ -1,11 +1,6 @@
 use crossterm::event::KeyCode;
 use std::path::PathBuf;
-use tui::{
-    buffer::Buffer,
-    layout::Rect,
-    style::{Color, Style},
-    widgets::{Block, BorderType, Borders, StatefulWidget, Widget},
-};
+use tui::{buffer::Buffer, layout::Rect, widgets::StatefulWidget};
 
 pub mod details;
 pub mod search;

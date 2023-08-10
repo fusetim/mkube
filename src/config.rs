@@ -1,5 +1,5 @@
-use serde::{Deserialize, Serialize};
 use crate::library::Library;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize, Default)]
 pub struct Configuration {

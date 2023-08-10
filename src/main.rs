@@ -83,7 +83,7 @@ where
     mkube::MESSAGE_SENDER
         .set(sender)
         .map_err(|err| anyhow!("Failed to init MESSAGE_SENDER, causes:\n{:?}", err))?;
-    let mut cfg : mkube::config::Configuration = confy::load(APP_NAME, CONFIG_NAME)?;
+    let mut cfg: mkube::config::Configuration = confy::load(APP_NAME, CONFIG_NAME)?;
     let app = views::App {
         settings_page: views::settings::SettingsPage::new(),
         movie_manager: Default::default(),
@@ -96,7 +96,9 @@ where
     // Load libraries from config.
     for lib in &cfg.libraries {
         if let Ok(mut conn) = MultiFs::try_from(lib) {
-            if !conn.as_mut_rfs().is_connected() { let _ = conn.as_mut_rfs().connect(); }
+            if !conn.as_mut_rfs().is_connected() {
+                let _ = conn.as_mut_rfs().connect();
+            }
             state.conns.push(conn);
             state.libraries.push(lib.clone());
         }

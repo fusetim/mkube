@@ -2,13 +2,15 @@ use crossterm::event::KeyCode;
 use std::path::PathBuf;
 use tui::{
     buffer::Buffer,
-    layout::{Layout, Direction, Constraint, Rect},
+    layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    widgets::{Paragraph, Row, StatefulWidget, Table, TableState, Widget, Block, Borders, BorderType},
+    widgets::{
+        Block, BorderType, Borders, Paragraph, Row, StatefulWidget, Table, TableState, Widget,
+    },
 };
 
 use crate::nfo::Movie;
-use crate::views::movie_manager::{MovieManagerEvent, MovieManagerMessage, details::MovieDetails};
+use crate::views::movie_manager::{details::MovieDetails, MovieManagerEvent, MovieManagerMessage};
 use crate::MESSAGE_SENDER;
 use crate::{AppEvent, AppMessage};
 
@@ -35,21 +37,27 @@ impl StatefulWidget for MovieTable {
             return;
         }
 
-        let mut block = Block::default()
+        let block = Block::default()
             .borders(Borders::ALL)
             .border_style(Style::default().fg(Color::White))
             .border_type(BorderType::Rounded)
             .title(" Movies ");
 
         let mut movie_chunk = area.clone();
-        if area.height > 20 {
+        if area.height > 18 {
             if let Some(movie) = state.table_state.selected() {
                 let chunks = Layout::default()
                     .direction(Direction::Vertical)
-                    .constraints(vec![Constraint::Min(area.height - 12), Constraint::Percentage(100)])
-                    .split(block.inner(area.clone()));
+                    .constraints(vec![
+                        Constraint::Min(area.height - 10),
+                        Constraint::Percentage(100),
+                    ])
+                    .split(area.clone());
                 movie_chunk = chunks[0];
-                MovieDetails { movie: &state.movies[movie].0 }.render(chunks[1], buf);
+                MovieDetails {
+                    movie: &state.movies[movie].0,
+                }
+                .render(chunks[1], buf);
             }
         }
 
@@ -95,7 +103,7 @@ impl StatefulWidget for MovieTable {
             ])
             .column_spacing(1)
             .highlight_style(Style::default().bg(Color::LightRed));
-        
+
         block.render(movie_chunk, buf);
         StatefulWidget::render(table, inner, buf, &mut state.table_state);
     }

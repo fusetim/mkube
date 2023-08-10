@@ -1,6 +1,6 @@
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 use url::Url;
-use serde::{Deserialize, Serialize};
 
 #[cfg(feature = "ftp")]
 use remotefs_ftp::client::FtpFs;

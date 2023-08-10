@@ -13,13 +13,13 @@ use tmdb_api::{
 use tokio::sync::mpsc::UnboundedSender;
 use url::Url;
 
+pub mod config;
 pub mod library;
 pub mod localfs;
 pub mod multifs;
 pub mod nfo;
 pub mod util;
 pub mod views;
-pub mod config;
 
 use multifs::{MultiFs, OwnedCursor};
 pub use views::{AppEvent, AppMessage, AppState};
@@ -92,7 +92,10 @@ pub async fn analyze_library(
                 log::debug!("Found {}!", entry.path().display());
                 video_paths.push(entry.path().to_owned());
             } else {
-                log::debug!("Ignored {} (not a video container)!", entry.path().display());
+                log::debug!(
+                    "Ignored {} (not a video container)!",
+                    entry.path().display()
+                );
             }
         } else if entry.is_dir() {
             if entry.path().ends_with(".") || entry.path().ends_with("..") {

@@ -48,22 +48,29 @@ impl InputState {
                 // Store the graphemes len of the composants
                 let mut old_len = 0;
 
-                // Prepare and format the new input using the surrounding graphemes (as they might combine 
+                // Prepare and format the new input using the surrounding graphemes (as they might combine
                 // due to Combining character).
                 let prev = if self.cursor > 0 {
-                    old_len+=1;
-                    self.value[self.cursor-1].as_str()
-                } else { "" };
+                    old_len += 1;
+                    self.value[self.cursor - 1].as_str()
+                } else {
+                    ""
+                };
                 let next = if self.cursor < self.value.len() {
-                    old_len+=1;
+                    old_len += 1;
                     self.value[self.cursor].as_str()
-                } else { "" };
+                } else {
+                    ""
+                };
                 let tmp = format!("{}{}{}", prev, c, next);
                 let new_len = tmp.graphemes(false).count();
 
                 // Replace efficiently the inner value
-                self.value.splice(self.cursor.saturating_sub(1)..Ord::min(self.cursor + 1, self.value.len()), tmp.graphemes(false).into_iter().map(|s| s.to_string()));
-                
+                self.value.splice(
+                    self.cursor.saturating_sub(1)..Ord::min(self.cursor + 1, self.value.len()),
+                    tmp.graphemes(false).into_iter().map(|s| s.to_string()),
+                );
+
                 // If the input create a new grapheme, increment the cursor.
                 if old_len < new_len {
                     self.cursor += 1;
