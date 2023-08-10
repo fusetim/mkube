@@ -6,6 +6,7 @@ use tmdb_api::client::Client as TmdbClient;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::time::{self, Duration};
+use url::Url;
 
 use crossterm::event::{
     DisableMouseCapture, EnableMouseCapture, Event, EventStream, KeyCode, KeyModifiers,
@@ -156,6 +157,8 @@ where
                                 let l = state.libraries.swap_remove(ind);
                                 let _ = state.conns.swap_remove(ind);
                                 state.register_event(AppEvent::SettingsEvent(SettingsEvent::EditExisting(l)));
+                            } else {
+                                log::error!("Invalid library editing, message ignored.");
                             }
                         },
                         AppMessage::SettingsMessage(SettingsMessage::SaveLibrary(lib)) => {
@@ -164,7 +167,9 @@ where
                                 state.conns.push(conn);
                                 state.libraries.push(lib.clone());
                                 cfg.libraries.push(lib);
-                                let _ = confy::store(APP_NAME, CONFIG_NAME, &cfg);
+                                if let Err(err) = confy::store(APP_NAME, CONFIG_NAME, &cfg) {
+                                    log::error!("Failed to save configuration, causes:\n{:?}", err);
+                                }
                             }
                             state.register_event(AppEvent::SettingsEvent(SettingsEvent::OpenMenu(state.libraries.clone())));
                         },
@@ -175,6 +180,16 @@ where
                             } else {
                                 (false, false)
                             };
+                            let rst = match MultiFs::try_from(&lib) {
+                                Ok(mut conn) => {
+                                    let _ = conn.as_mut_rfs().connect();
+                                    (conn.as_mut_rfs().is_connected(), conn.as_mut_rfs().exists(&lib.path.as_path()).unwrap_or(false))
+                                },
+                                Err(err) => {
+                                    log::warn!("Connection to library `{}` failed due to:\n{:?}", Url::try_from(&lib).as_ref().map(Url::as_ref).unwrap_or("N/A"), err);
+                                    (false, false)
+                                },
+                            };
                             state.register_event(AppEvent::SettingsEvent(SettingsEvent::ConnTestResult(rst)));
                         },
                         AppMessage::MovieManagerMessage(MovieManagerMessage::RefreshMovies) => {
@@ -182,16 +197,21 @@ where
                             for i in 0..state.conns.len() {
                                 let _ = state.conns[i].as_mut_rfs().connect();
                                 if state.conns[i].as_mut_rfs().is_connected() {
-                                    if let Ok(paths) = mkube::analyze_library(&mut state.conns[i], state.libraries[i].path.clone(), 2).await {
-                                        for path in paths {
-                                            let placeholder_title = format!("{}", path.file_name().map(|s| s.to_string_lossy().to_owned()).unwrap_or("Invalid file name.".into()));
-                                            let movie = mkube::try_open_nfo(&mut state.conns[i], path.clone()).await.unwrap_or_else(|_| {
-                                                mkube::nfo::Movie {
-                                                    title: placeholder_title,
-                                                    ..Default::default()
-                                                }
-                                            });
-                                            state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::MovieDiscovered((movie, i, path))));
+                                    match mkube::analyze_library(&mut state.conns[i], state.libraries[i].path.clone(), 2).await {
+                                        Ok(paths) => {
+                                            for path in paths {
+                                                let placeholder_title = format!("{}", path.file_name().map(|s| s.to_string_lossy().to_owned()).unwrap_or("Invalid file name.".into()));
+                                                let movie = mkube::try_open_nfo(&mut state.conns[i], path.clone()).await.unwrap_or_else(|_| {
+                                                    mkube::nfo::Movie {
+                                                        title: placeholder_title,
+                                                        ..Default::default()
+                                                    }
+                                                });
+                                                state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::MovieDiscovered((movie, i, path))));
+                                            }
+                                        },
+                                        Err(err) => {
+                                            log::error!("Failed to analyze library `{}` due to:\n{:?}", Url::try_from(& state.libraries[i]).as_ref().map(Url::as_ref).unwrap_or("N/A"), err);
                                         }
                                     }
                                 }
@@ -200,13 +220,12 @@ where
                         AppMessage::MovieManagerMessage(MovieManagerMessage::SearchTitle(title)) => {
                             use tmdb_api::movie::search::MovieSearch;
                             use tmdb_api::prelude::Command;
-                            let ms = MovieSearch::new(title)
+                            let ms = MovieSearch::new(title.clone())
                                 .with_language(Some(cfg.tmdb_preferences.prefered_lang.clone()))
                                 .with_region(Some(cfg.tmdb_preferences.prefered_country.clone()));
-                            if let Ok(results) = ms.execute(&tmdb_client).await {
-                                state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::SearchResults(results.results)));
-                            } else {
-                                // TODO
+                            match ms.execute(&tmdb_client).await {
+                                Ok(results) => { state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::SearchResults(results.results))); },
+                                Err(err) => { log::error!("Movie search failed for title `{}` due to:\n{:?}", title, err); },
                             }
                         },
                         AppMessage::MovieManagerMessage(MovieManagerMessage::SaveNfo((id, fs_id, mut path))) => {
