@@ -16,7 +16,7 @@ use crossterm::execute;
 use crossterm::terminal::{
     disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen,
 };
-use tui::{backend::CrosstermBackend, terminal::Terminal};
+use tui::{backend::CrosstermBackend, terminal::Terminal, widgets::Paragraph};
 
 #[cfg(feature = "secrets")]
 use oo7::Keyring;
@@ -80,16 +80,73 @@ async fn init_logger() {
         .init();
 }
 
+#[cfg(feature = "secrets")]
+async fn init_keyring() -> Result<Keyring> {
+    use anyhow::bail;
+    use oo7::portal::Secret;
+    use rand::thread_rng;
+    use rand::RngCore;
+    use std::sync::Arc;
+    use std::time::Duration as StdDuration;
+    use tokio::time::{error::Elapsed, timeout};
+    match oo7::portal::Keyring::load_default().await {
+        Ok(keyring) => Ok(Keyring::File(Arc::new(keyring))),
+        Err(err) => {
+            log::error!("Failed to init keyring using Secret Portal, falling back to Secret DBus API + Keyring File. Cause:\n{:?}", err);
+            let kr = Keyring::new().await?;
+            match timeout(StdDuration::from_secs(60), kr.unlock()).await {
+                Ok(rst) => match rst {
+                    Ok(()) => {}
+                    Err(err) => bail!("Failed to unlock keyring. Cause:\n{:?}", err),
+                },
+                Err(elapsed) => {
+                    bail!("Timeout, failed to unlock keyring. Cause:\n{:?}", elapsed);
+                }
+            }
+            let attrs = HashMap::from([("app", APP_NAME), ("secret", "keyring_key")]);
+            let key: Vec<u8> = if let Some(key_) = kr
+                .search_items(attrs.clone())
+                .await
+                .map_err(|err| anyhow!("Failed to find the keyring_key, err:\n{:?}", err))?
+                .get(0)
+            {
+                key_.secret().await?.to_vec()
+            } else {
+                let mut rng = thread_rng();
+                let mut key_ = [0; 1024];
+                RngCore::fill_bytes(&mut rng, &mut key_[..]);
+                kr.create_item("MKube Keyring key", attrs, &key_, true)
+                    .await?;
+                key_.to_vec()
+            };
+            //kr.lock().await?;
+            let keyring = oo7::portal::Keyring::load(
+                confy::get_configuration_file_path(APP_NAME, None)?.join("../keyring.key"),
+                Secret::from(key),
+            )
+            .await?;
+            Ok(Keyring::File(Arc::new(keyring)))
+        }
+    }
+}
+
 async fn run<B>(terminal: &mut Terminal<B>) -> Result<()>
 where
     B: tui::backend::Backend,
 {
+    terminal.draw(|f| {
+        let size = f.size();
+        f.render_widget(
+            Paragraph::new("Initializing... (You might need to unlock your system KeyWallet.)"),
+            size,
+        );
+    })?;
     let (sender, mut receiver) = unbounded_channel();
     let tmdb_client = TmdbClient::new("74a673b58f22dd90b8ac750b62e00b0b".into());
     let keyring;
     #[cfg(feature = "secrets")]
     {
-        keyring = Keyring::new().await?;
+        keyring = init_keyring().await?;
     }
     #[cfg(not(feature = "secrets"))]
     {

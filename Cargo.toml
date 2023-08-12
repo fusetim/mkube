@@ -30,9 +30,10 @@ log = { version = "0.4", features = ["std", "serde"] }
 structured-logger = "1"
 confy = "0.5.1"
 oo7 = { version = "0.2.1", features = ["tokio", "native_crypto"], default_features = false, optional = true }
+rand = { version = "0.8.5", optional = true }
 
 [features]
 default = ["ftp", "smb", "secrets"]
 ftp = ["dep:remotefs-ftp"]
 smb = ["dep:remotefs-smb"]
-secrets = ["dep:oo7"]
+secrets = ["dep:oo7", "dep:rand"]
