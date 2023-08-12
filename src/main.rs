@@ -1,6 +1,7 @@
 use anyhow::{anyhow, Result};
 use futures_util::{FutureExt, StreamExt};
 use remotefs::fs::Metadata;
+use std::collections::HashMap;
 use std::io;
 use tmdb_api::client::Client as TmdbClient;
 use tokio::io::AsyncWriteExt;
@@ -17,6 +18,10 @@ use crossterm::terminal::{
 };
 use tui::{backend::CrosstermBackend, terminal::Terminal};
 
+#[cfg(feature = "secrets")]
+use oo7::Keyring;
+
+use mkube::config::{ConfigLibrary, Credentials};
 use mkube::multifs;
 use mkube::views;
 
@@ -81,6 +86,15 @@ where
 {
     let (sender, mut receiver) = unbounded_channel();
     let tmdb_client = TmdbClient::new("74a673b58f22dd90b8ac750b62e00b0b".into());
+    let keyring;
+    #[cfg(feature = "secrets")]
+    {
+        keyring = Keyring::new().await?;
+    }
+    #[cfg(not(feature = "secrets"))]
+    {
+        keyring = ()
+    }
     mkube::MESSAGE_SENDER
         .set(sender)
         .map_err(|err| anyhow!("Failed to init MESSAGE_SENDER, causes:\n{:?}", err))?;
@@ -95,13 +109,56 @@ where
     tokio::pin!(tick);
 
     // Load libraries from config.
+    #[cfg(feature = "secrets")]
+    {
+        keyring
+            .unlock()
+            .await
+            .map_err(|err| anyhow!("Failed to unlock keyring, causes:\n{:?}", err))?;
+        for lib in cfg.libraries.iter_mut() {
+            if let Credentials::ToKeyring(c) = lib.password.clone() {
+                let path = lib.path.display().to_string();
+                let attributes = HashMap::from([
+                    ("fs_type", lib.fs_type.to_scheme()),
+                    ("host", lib.host.as_deref().unwrap_or("")),
+                    ("username", lib.username.as_deref().unwrap_or("")),
+                    ("path", &path),
+                ]);
+                match keyring.create_item(&lib.name, attributes, &c, true).await {
+                    Ok(()) => lib.password = Credentials::Keyring,
+                    Err(err) => {
+                        log::error!("Failed to save credentials to keyring, the credentials will be saved as clear text temporary. Cause:\n{:?}", err);
+                    }
+                }
+            }
+        }
+        keyring
+            .lock()
+            .await
+            .map_err(|err| anyhow!("Failed to lock keyring, causes:\n{:?}", err))?;
+    }
     for lib in &cfg.libraries {
-        if let Ok(mut conn) = MultiFs::try_from(lib) {
+        let lib_;
+        #[cfg(feature = "secrets")]
+        {
+            lib_ = ConfigLibrary::try_into_with_keyring(lib.clone(), &keyring).await?;
+        }
+
+        #[cfg(not(feature = "secrets"))]
+        {
+            lib_ = ConfigLibrary::into(lib.clone());
+        }
+
+        if let Ok(mut conn) = MultiFs::try_from(&lib_) {
             if !conn.as_mut_rfs().is_connected() {
                 let _ = conn.as_mut_rfs().connect();
             }
             state.conns.push(conn);
-            state.libraries.push(lib.clone());
+            if cfg!(feature = "secrets") {
+                state.libraries.push(lib_);
+            } else {
+                state.libraries.push(lib_);
+            }
         }
     }
 
@@ -167,7 +224,14 @@ where
                                 if !conn.as_mut_rfs().is_connected() { let _ = conn.as_mut_rfs().connect(); }
                                 state.conns.push(conn);
                                 state.libraries.push(lib.clone());
-                                cfg.libraries.push(lib);
+                                #[cfg(feature = "secrets")]
+                                {
+                                    cfg.libraries.push(ConfigLibrary::from_with_keyring(lib, &keyring).await);
+                                }
+                                #[cfg(not(feature = "secrets"))]
+                                {
+                                    cfg.libraries.push(lib.into());
+                                }
                                 if let Err(err) = confy::store(APP_NAME, CONFIG_NAME, &cfg) {
                                     log::error!("Failed to save configuration, causes:\n{:?}", err);
                                 }
@@ -175,12 +239,6 @@ where
                             state.register_event(AppEvent::SettingsEvent(SettingsEvent::OpenMenu(state.libraries.clone())));
                         },
                         AppMessage::SettingsMessage(SettingsMessage::TestLibrary(lib)) => {
-                            let rst = if let Ok(mut conn) = MultiFs::try_from(&lib) {
-                                let _ = conn.as_mut_rfs().connect();
-                                (conn.as_mut_rfs().is_connected(), conn.as_mut_rfs().exists(&lib.path.as_path()).unwrap_or(false))
-                            } else {
-                                (false, false)
-                            };
                             let rst = match MultiFs::try_from(&lib) {
                                 Ok(mut conn) => {
                                     let _ = conn.as_mut_rfs().connect();
@@ -245,8 +303,8 @@ where
                             let _ = buf.rewind();
                             let _ = state.conns[fs_id].as_mut_rfs().create_file(&path, &Metadata::default(), Box::new(buf))
                                 .map_err(|err| anyhow!("Can't open the nfo file., causes:\n{:?}", err))?;
-                            state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::OpenTable)); 
-                            state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::MovieUpdated((movie_nfo, fs_id, movie_path)))); 
+                            state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::OpenTable));
+                            state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::MovieUpdated((movie_nfo, fs_id, movie_path))));
                         },
                         AppMessage::Close => {
                             break;

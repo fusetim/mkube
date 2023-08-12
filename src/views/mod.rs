@@ -117,8 +117,9 @@ impl AppState {
                     if let TabState::MovieManager(ref mut mstate) = self.tab {
                         mstate.input(AppEvent::MovieManagerEvent(MovieManagerEvent::OpenTable))
                     } else {
-                        self.tab =
-                        TabState::MovieManager(self.saved_movie_state.clone().unwrap_or_default());
+                        self.tab = TabState::MovieManager(
+                            self.saved_movie_state.clone().unwrap_or_default(),
+                        );
                         true
                     }
                 } else if let TabState::Settings(ref mut state) = self.tab {

@@ -90,11 +90,16 @@ impl MovieManagerState {
                     } else {
                         state.input(app_event)
                     }
-                } else if let AppEvent::MovieManagerEvent(MovieManagerEvent::MovieUpdated(..)) = app_event {
-                    table_state.input(app_event)  
-                } else if let AppEvent::MovieManagerEvent(MovieManagerEvent::MovieDiscovered(..)) = app_event {
-                    table_state.input(app_event)  
-                } else if let AppEvent::MovieManagerEvent(MovieManagerEvent::OpenTable) = app_event {
+                } else if let AppEvent::MovieManagerEvent(MovieManagerEvent::MovieUpdated(..)) =
+                    app_event
+                {
+                    table_state.input(app_event)
+                } else if let AppEvent::MovieManagerEvent(MovieManagerEvent::MovieDiscovered(..)) =
+                    app_event
+                {
+                    table_state.input(app_event)
+                } else if let AppEvent::MovieManagerEvent(MovieManagerEvent::OpenTable) = app_event
+                {
                     *self = MovieManagerState::Table(table_state.clone());
                     true
                 } else {
