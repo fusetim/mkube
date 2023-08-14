@@ -27,10 +27,10 @@
   outputs = { self, nixpkgs, crane, fenix, flake-utils, advisory-db, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let 
+        features = [ "smb" "ftp" "secrets" ];
         toolchain = (fenix.packages.${system}.toolchainOf {
-            channel = "nightly";
-            date = "2023-07-27";
-            sha256 = "1bUA3mqH455LncZMMH1oEBFLWu5TOluJeDZ8iwAsBGs=";
+            channel = "1.71.0";
+            sha256 = "sha256-ks0nMEGGXKrHnfv4Fku+vhQ7gx76ruv6Ij4fKZR3l78=";
           });
       in
       let
@@ -40,6 +40,7 @@
 
         inherit (pkgs) lib;
         inherit toolchain;
+        inherit features;
 
         craneLib = crane.lib.${system};
         src = craneLib.cleanCargoSource (craneLib.path ./.);
@@ -61,6 +62,11 @@
             pkgs.llvmPackages_latest.libclang
             pkgs.rustPlatform.bindgenHook
             pkgs.openssl
+          ] ++ lib.optionals (builtins.elem "secrets" features) [
+            # Additional darwin specific inputs can be set here
+            pkgs.dbus.lib
+          ] ++ lib.optionals (builtins.elem "smb" features) [
+            # Additional darwin specific inputs can be set here
             pkgs.samba
             pkgs.samba.dev
           ] ++ lib.optionals pkgs.stdenv.isDarwin [
@@ -68,8 +74,6 @@
             pkgs.libiconv
           ];
 
-          # Additional environment variables can be set directly
-          # MY_CUSTOM_VAR = "some value";
         };
 
         craneLibLLvmTools = craneLib.overrideToolchain (toolchain.withComponents [
@@ -90,6 +94,8 @@
           nativeBuildInputs = [ pkgs.pkg-config ];
 
           buildInputs = commonArgs.buildInputs ++ [];
+
+          cargoExtraArgs = "--no-default-features --features ${builtins.concatStringsSep "," features}";
 
           meta = with lib; {
             description = "Minimalist Media Manager (M³) - Rust minimalist TUI to manage your remote mediacenter.";
@@ -173,17 +179,7 @@
             pkg-config
           ];
 
-          buildInputs = commonArgs.buildInputs ++ [
-            pkgs.ffmpeg
-            pkgs.ffmpeg.dev
-            pkgs.ffmpeg.lib
-            pkgs.llvmPackages_latest.libclang
-            pkgs.llvmPackages_latest.bintools
-            pkgs.clang_16
-            pkgs.openssl
-            pkgs.samba
-            pkgs.samba.dev
-          ];
+          buildInputs = commonArgs.buildInputs ++ [ ];
 
           LIBCLANG_PATH = "${pkgs.llvmPackages_latest.libclang.lib}/lib";
           BINDGEN_EXTRA_CLANG_ARGS = 
@@ -193,6 +189,7 @@
                 pkgs.glibc.dev 
                 pkgs.ffmpeg.dev
                 pkgs.samba.dev
+                pkgs.dbus.dev
               ])
               # Includes with special directory paths
               ++ [

@@ -40,13 +40,14 @@ I am unsure if Windows will get supported one day, even partially.
 
 MKube currently requires the following dependencies (but it might not be limited to these):
 - ffmpeg(-dev)
-- libsmbclient (`smb` feature, *enabled by default*)
 - openssl
+- libsmbclient (`smb` feature, *enabled by default*)
+- libdbus (`secrets` feature, *enabled by default*)
 
 Then, just build it: `cargo build --release`
 
 Note: You might need to install a recent (or nightly) rust toolchain to build MKube.
-At the time of writting, MKube targets Rust `nightly-2023-07-27`.
+At the time of writting, MKube targets Rust `1.71.0`.
 
 ### Using Nix
 
