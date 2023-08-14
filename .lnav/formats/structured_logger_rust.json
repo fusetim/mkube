@@ -1,0 +1,65 @@
+{
+  "structured_logger": {
+    "json": true,
+    "title": "Rust structured_logger",
+    "level-field": "level",
+    "file-pattern": ".*\\.log$",
+    "level": {
+      "error": "ERROR",
+      "warning": "WARNING",
+      "trace": "TRACE",
+      "info": "INFO",
+      "debug": "DEBUG"
+    },
+    "hide-extra": true,
+    "module-field": "module",
+    "timestamp-field": "timestamp",
+    "timestamp-divisor": 1000,
+    "body-field": "message",
+    "value": {
+      "message": {
+        "kind": "string"
+      },
+      "file": {
+        "kind": "string",
+        "hidden": true
+      },
+      "target": {
+        "kind": "string"
+      },
+      "line": {
+        "kind": "integer",
+        "hidden": true
+      },
+      "module": {
+        "kind": "string",
+        "hidden": true
+      }
+    },
+    "line-format": [
+      "[",
+      {
+        "field": "__timestamp__"
+      },
+      "]",
+      "[",
+      {
+        "field": "level"
+      },
+      "] ",
+      {
+        "field": "target"
+      },
+      " > ",
+      {
+        "field": "message"
+      }
+    ],
+    "sample": [
+      {
+        "line": "{\"file\":\"/home/fusetim/.cargo/registry/src/index.crates.io-6f17d22bba15001f/remotefs-ftp-0.1.3/src/client.rs\",\"level\":\"ERROR\",\"line\":365,\"message\":\"Could not find file; no such file or directory\",\"module\":\"remotefs_ftp::client\",\"target\":\"remotefs_ftp::client\",\"timestamp\":1691938930550}",
+        "level": "error"
+      }
+    ]
+  }
+}
