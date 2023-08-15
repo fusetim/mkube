@@ -114,7 +114,7 @@ impl SettingsState {
             AppEvent::SettingsEvent(SettingsEvent::ConnTestResult(tests)) => {
                 if let SettingsState::Edit(ref mut state) = self {
                     state.test_result = Some(tests);
-                    state.test.clicked(false);
+                    state.test.click(false);
                     true
                 } else {
                     false

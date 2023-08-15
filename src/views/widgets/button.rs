@@ -96,7 +96,7 @@ impl ButtonState {
         !self.disabled
     }
 
-    pub fn clicked(&mut self, state: bool) {
+    pub fn click(&mut self, state: bool) {
         self.clicked = state;
     }
 

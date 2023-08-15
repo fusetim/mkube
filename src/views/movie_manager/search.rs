@@ -168,7 +168,7 @@ impl MovieSearchState {
                             let sender = MESSAGE_SENDER.get().unwrap();
                             sender
                                 .send(AppMessage::MovieManagerMessage(
-                                    MovieManagerMessage::SaveNfo((
+                                    MovieManagerMessage::CreateNfo((
                                         self.results[index].inner.id,
                                         self.movie_fs_id,
                                         self.movie_path.clone(),

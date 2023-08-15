@@ -120,6 +120,10 @@ impl InputState {
         self.disabled
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.value.len() == 0
+    }
+
     pub fn set_value<T: Into<String>>(&mut self, val: T) {
         self.value = val
             .into()
@@ -141,12 +145,22 @@ impl StatefulWidget for Input {
         let rows = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Min(1), Constraint::Percentage(100)].as_ref())
-            .split(area.clone());
+            .split(area);
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([self.horiz_constraint].as_ref())
             .split(rows[0]);
 
+        let (content, style) = self.render_text(chunks[0].clone(), state);
+        let par = Paragraph::new(content)
+            .wrap(Wrap { trim: true })
+            .style(style);
+        par.render(chunks[0], buf);
+    }
+}
+
+impl Input {
+    pub fn render_text<'a>(self, area: Rect, state: &'a mut InputState) -> (Text<'a>, Style) {
         let style = if state.disabled {
             self.disable_style
         } else if state.focused {
@@ -154,21 +168,22 @@ impl StatefulWidget for Input {
         } else {
             self.style
         };
-        let par = if area.width < 10 {
+        if area.width < 10 {
             let error_style = Style::default()
                 .bg(Color::Red)
                 .fg(Color::White)
                 .add_modifier(Modifier::BOLD)
                 .add_modifier(Modifier::SLOW_BLINK);
-            Paragraph::new(Text::raw("TOO SMALL")).style(error_style)
+            (Text::raw("TOO SMALL"), error_style)
         } else {
             if state.value.len() == 0 {
                 if let Some(placeholder) = self.placeholder.clone() {
-                    Paragraph::new(Text::raw(placeholder))
-                        .style(style.patch(self.placeholder_style.clone()))
-                        .wrap(Wrap { trim: true })
+                    (
+                        Text::raw(placeholder),
+                        style.patch(self.placeholder_style.clone()),
+                    )
                 } else {
-                    Paragraph::new(Text::raw(state.get_value())).style(style)
+                    (Text::raw(state.get_value()), style.clone())
                 }
             } else {
                 let width = area.width as usize;
@@ -185,30 +200,35 @@ impl StatefulWidget for Input {
                     .collect();
                 if state.focused {
                     if state.value.len() <= state.cursor {
-                        Paragraph::new(Spans::from(vec![
-                            Span::raw(String::from_iter(content)),
-                            Span::styled(
-                                tui::symbols::block::FULL,
-                                Style::default().bg(Color::Red),
-                            ),
-                        ]))
-                        .style(style)
+                        (
+                            Text::from(Spans::from(vec![
+                                Span::raw(String::from_iter(content)),
+                                Span::styled(
+                                    tui::symbols::block::FULL,
+                                    Style::default().bg(Color::Red),
+                                ),
+                            ])),
+                            style,
+                        )
                     } else {
-                        Paragraph::new(Spans::from(vec![
-                            Span::raw(String::from_iter(content[..(cursor_pos)].to_owned())),
-                            Span::styled(
-                                content[cursor_pos],
-                                Style::default().fg(Color::Black).bg(Color::White),
-                            ),
-                            Span::raw(String::from_iter(content[(cursor_pos + 1)..].to_owned())),
-                        ]))
-                        .style(style)
+                        (
+                            Text::from(Spans::from(vec![
+                                Span::raw(String::from_iter(content[..(cursor_pos)].to_owned())),
+                                Span::styled(
+                                    content[cursor_pos],
+                                    Style::default().fg(Color::Black).bg(Color::White),
+                                ),
+                                Span::raw(String::from_iter(
+                                    content[(cursor_pos + 1)..].to_owned(),
+                                )),
+                            ])),
+                            style,
+                        )
                     }
                 } else {
-                    Paragraph::new(Text::raw(String::from_iter(content))).style(style)
+                    (Text::raw(String::from_iter(content)), style)
                 }
             }
-        };
-        par.render(chunks[0], buf);
+        }
     }
 }

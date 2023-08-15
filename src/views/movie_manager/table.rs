@@ -149,6 +149,18 @@ impl MovieTableState {
                     } else {
                         false
                     }
+                } else if kev.code == KeyCode::Char('e') {
+                    if let Some(s) = self.table_state.selected() {
+                        let sender = MESSAGE_SENDER.get().unwrap();
+                        sender
+                            .send(AppMessage::TriggerEvent(AppEvent::MovieManagerEvent(
+                                MovieManagerEvent::EditMovie(self.movies[s].clone()),
+                            )))
+                            .unwrap();
+                        true
+                    } else {
+                        false
+                    }
                 } else {
                     false
                 }

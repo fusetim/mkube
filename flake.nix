@@ -63,10 +63,8 @@
             pkgs.rustPlatform.bindgenHook
             pkgs.openssl
           ] ++ lib.optionals (builtins.elem "secrets" features) [
-            # Additional darwin specific inputs can be set here
             pkgs.dbus.lib
           ] ++ lib.optionals (builtins.elem "smb" features) [
-            # Additional darwin specific inputs can be set here
             pkgs.samba
             pkgs.samba.dev
           ] ++ lib.optionals pkgs.stdenv.isDarwin [

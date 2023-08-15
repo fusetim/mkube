@@ -88,7 +88,7 @@ async fn init_keyring() -> Result<Keyring> {
     use rand::RngCore;
     use std::sync::Arc;
     use std::time::Duration as StdDuration;
-    use tokio::time::{error::Elapsed, timeout};
+    use tokio::time::timeout;
     match oo7::portal::Keyring::load_default().await {
         Ok(keyring) => Ok(Keyring::File(Arc::new(keyring))),
         Err(err) => {
@@ -344,12 +344,28 @@ where
                                 Err(err) => { log::error!("Movie search failed for title `{}` due to:\n{:?}", title, err); },
                             }
                         },
-                        AppMessage::MovieManagerMessage(MovieManagerMessage::SaveNfo((id, fs_id, mut path))) => {
+                        AppMessage::MovieManagerMessage(MovieManagerMessage::CreateNfo((id, fs_id, mut path))) => {
                             use std::io::Cursor;
                             use std::io::Seek;
                             let mut movie_nfo = mkube::transform_as_nfo(&tmdb_client, id, Some(cfg.tmdb_preferences.prefered_lang.clone())).await?;
                             let mt = mkube::get_metadata(&mut state.conns[fs_id], (&state.libraries[fs_id]).try_into().expect("Cannot get a baseURL from library."), path.clone()).await?;
                             movie_nfo.fileinfo = Some(mt);
+                            let nfo_string = quick_xml::se::to_string(&movie_nfo).expect("Failed to produce a valid nfo file.");
+                            let movie_path= path.clone();
+
+                            path.set_extension("nfo");
+                            let mut buf = Cursor::new(Vec::new());
+                            buf.write_all(br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>"#).await?;
+                            buf.write_all(nfo_string.as_bytes()).await?;
+                            let _ = buf.rewind();
+                            let _ = state.conns[fs_id].as_mut_rfs().create_file(&path, &Metadata::default(), Box::new(buf))
+                                .map_err(|err| anyhow!("Can't open the nfo file., causes:\n{:?}", err))?;
+                            state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::OpenTable));
+                            state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::MovieUpdated((movie_nfo, fs_id, movie_path))));
+                        },
+                        AppMessage::MovieManagerMessage(MovieManagerMessage::SaveNfo((movie_nfo, fs_id, mut path))) => {
+                            use std::io::Cursor;
+                            use std::io::Seek;
                             let nfo_string = quick_xml::se::to_string(&movie_nfo).expect("Failed to produce a valid nfo file.");
                             let movie_path= path.clone();
 
