@@ -50,7 +50,6 @@ pub struct MovieEditorState {
     pub table_state: TableState,
     pub fields_value: [InputState; 10],
     pub actor_state: Vec<[InputState; 4]>,
-    pub crew_state: Vec<[InputState; 3]>,
     pub producer_state: Vec<[InputState; 3]>,
     pub director_state: Vec<[InputState; 3]>,
     pub open_tab: usize,
@@ -262,7 +261,19 @@ impl MovieEditorState {
                                 self.actor_state.push(Default::default());
                             }
                             self.actor_state[v][self.selected_column].input(kev)
-                        }
+                        },
+                        2 => {
+                            if v == self.producer_state.len() {
+                                self.producer_state.push(Default::default());
+                            }
+                            self.producer_state[v][self.selected_column].input(kev)
+                        },
+                        3 => {
+                            if v == self.director_state.len() {
+                                self.director_state.push(Default::default());
+                            }
+                            self.director_state[v][self.selected_column].input(kev)
+                        },
                         _ => self.fields_value[v].input(kev),
                     }
                 } else {
@@ -324,6 +335,7 @@ impl MovieEditorState {
         nfo.actor = self
             .actor_state
             .iter()
+            .filter(|inputs| !inputs[0].is_empty())
             .enumerate()
             .map(|(i, inputs)| Actor {
                 name: inputs[0].get_value().to_owned(),
@@ -347,6 +359,7 @@ impl MovieEditorState {
         nfo.director = self
             .director_state
             .iter()
+            .filter(|inputs| !inputs[0].is_empty())
             .map(|inputs| CrewPerson {
                 name: inputs[0].get_value().to_owned(),
                 tmdbid: inputs[1].get_value().parse().ok(),
@@ -363,6 +376,7 @@ impl MovieEditorState {
         nfo.producer = self
             .producer_state
             .iter()
+            .filter(|inputs| !inputs[0].is_empty())
             .map(|inputs| CrewPerson {
                 name: inputs[0].get_value().to_owned(),
                 tmdbid: inputs[1].get_value().parse().ok(),
