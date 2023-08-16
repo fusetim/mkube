@@ -21,7 +21,7 @@ pub struct Input {
 impl Default for Input {
     fn default() -> Input {
         Input {
-            style: Style::default().fg(Color::Black).bg(Color::Gray),
+            style: Style::default().fg(Color::Gray).bg(Color::Black),
             focus_style: Style::default().fg(Color::White).bg(Color::LightRed),
             disable_style: Style::default()
                 .fg(Color::Black)

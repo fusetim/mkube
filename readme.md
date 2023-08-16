@@ -18,7 +18,7 @@ today or in the future :
 - [x] NFO generation (for Kodi only)
 - [x] Persistent configuration
 - [x] Movie details 
-- [ ] Movie Editor (#4)
+- [x] Movie Editor
 - [ ] Artwork retrievals (#17)
 - [ ] Saga support (#15)
 - [ ] TV Show support (#5)
