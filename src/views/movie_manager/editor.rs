@@ -261,19 +261,19 @@ impl MovieEditorState {
                                 self.actor_state.push(Default::default());
                             }
                             self.actor_state[v][self.selected_column].input(kev)
-                        },
+                        }
                         2 => {
                             if v == self.producer_state.len() {
                                 self.producer_state.push(Default::default());
                             }
                             self.producer_state[v][self.selected_column].input(kev)
-                        },
+                        }
                         3 => {
                             if v == self.director_state.len() {
                                 self.director_state.push(Default::default());
                             }
                             self.director_state[v][self.selected_column].input(kev)
-                        },
+                        }
                         _ => self.fields_value[v].input(kev),
                     }
                 } else {
