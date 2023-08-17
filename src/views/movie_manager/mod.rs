@@ -48,6 +48,7 @@ pub enum MovieManagerMessage {
     RefreshMovies,
     SearchTitle(String),
     CreateNfo((u64, usize, PathBuf)), // tmdb_id, fs_id, movie_path
+    RetrieveArtworks((crate::nfo::Movie, usize, PathBuf)),
     SaveNfo((crate::nfo::Movie, usize, PathBuf)),
 }
 

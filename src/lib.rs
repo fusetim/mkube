@@ -29,7 +29,7 @@ const VIDEO_EXTENSIONS: &'static [&'static str] = &[
 ];
 pub static MESSAGE_SENDER: OnceLock<UnboundedSender<AppMessage>> = OnceLock::new();
 
-async fn download_file<'a, U>(
+pub async fn download_file<'a, U>(
     lfs: &mut MultiFs,
     client: &reqwest::Client,
     output: PathBuf,
@@ -65,7 +65,7 @@ where
             )
         })?;
 
-    println!("Sucessfully downloaded file {}.", output.display());
+    log::info!("Sucessfully downloaded file {}.", output.display());
     Ok(())
 }
 

@@ -185,6 +185,9 @@ impl MovieTableState {
                                 movie, fs_id, path,
                             )))
                         }
+                        KeyCode::Char('a') => AppMessage::MovieManagerMessage(
+                            MovieManagerMessage::RetrieveArtworks(self.movies[s].clone()),
+                        ),
                         _ => return false,
                     };
                     sender.send(msg).unwrap();

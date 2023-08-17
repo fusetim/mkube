@@ -19,7 +19,7 @@ today or in the future :
 - [x] Persistent configuration
 - [x] Movie details 
 - [x] Movie Editor
-- [ ] Artwork retrievals (#17)
+- [x] Artwork retrievals
 - [ ] Saga support (#15)
 - [ ] TV Show support (#5)
 
@@ -43,7 +43,6 @@ MKube currently requires the following dependencies (but it might not be limited
 - ffmpeg(-dev)
 - openssl
 - libsmbclient (`smb` feature, *enabled by default*)
-- libdbus (`secrets` feature, *enabled by default*)
 
 Then, just build it: `cargo build --release`
 
