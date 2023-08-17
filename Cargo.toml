@@ -33,7 +33,7 @@ oo7 = { version = "0.2.1", features = ["tokio", "native_crypto"], default_featur
 rand = { version = "0.8.5", optional = true }
 
 [features]
-default = ["ftp", "smb", "secrets"]
+default = ["ftp", "secrets"]
 ftp = ["dep:remotefs-ftp"]
 smb = ["dep:remotefs-smb"]
 secrets = ["dep:oo7", "dep:rand"]

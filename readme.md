@@ -42,7 +42,8 @@ I am unsure if Windows will get supported one day, even partially.
 MKube currently requires the following dependencies (but it might not be limited to these):
 - ffmpeg(-dev)
 - openssl
-- libsmbclient (`smb` feature, *enabled by default*)
+- libdbus (`secrets` feature, *enabled by default*)
+- libsmbclient (`smb` feature, *disabled by default*)
 
 Then, just build it: `cargo build --release`
 
