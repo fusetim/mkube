@@ -15,10 +15,12 @@ pub mod settings;
 pub mod widgets;
 
 use crate::library::Library;
+use crate::{ConnectionPool, MESSAGE_SENDER};
 use movie_manager::{MovieManager, MovieManagerEvent, MovieManagerMessage, MovieManagerState};
 use settings::{SettingsMessage, SettingsPage, SettingsState};
 
 pub enum AppMessage {
+    Closure(Box<dyn FnOnce(&mut AppState) -> Option<AppEvent> + Send + Sync>),
     Future(
         Box<
             dyn FnOnce(&mut AppState) -> Pin<Box<dyn Future<Output = Option<AppEvent>> + Send>>
@@ -38,7 +40,8 @@ pub enum AppMessage {
     ),
     HttpFuture(
         Box<
-            dyn for<'a> FnOnce(
+            dyn for<'a, 'out> FnOnce(
+                    &'out mut AppState,
                     &'a reqwest::Client,
                     &'a tmdb_api::client::Client,
                 )
@@ -49,10 +52,11 @@ pub enum AppMessage {
     ),
     IOFuture(
         Box<
-            dyn for<'a> FnOnce(
+            dyn for<'a, 'out> FnOnce(
+                    &'out mut AppState,
                     &'a reqwest::Client,
                     &'a tmdb_api::client::Client,
-                    &'a tokio::sync::Mutex<Vec<Option<crate::multifs::MultiFs>>>,
+                    &'a ConnectionPool,
                 )
                     -> Pin<Box<dyn Future<Output = Option<AppEvent>> + 'a>>
                 + Send
@@ -69,6 +73,7 @@ impl std::fmt::Debug for AppMessage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> Result<(), std::fmt::Error> {
         match self {
             AppMessage::Close => write!(f, "AppMessage::Close"),
+            AppMessage::Closure(_) => write!(f, "AppMessage::Closure(<builder>)"),
             AppMessage::Future(_) => write!(f, "AppMessage::Future(<builder>)"),
             AppMessage::AppFuture(_) => write!(f, "AppMessage::AppFuture(<builder>)"),
             AppMessage::IOFuture(_) => write!(f, "AppMessage::IOFuture(<builder>)"),
@@ -102,7 +107,8 @@ pub enum AppEvent {
     ),
     ContinuationHttpFuture(
         Box<
-            dyn for<'a> FnOnce(
+            dyn for<'a, 'out> FnOnce(
+                    &'out mut AppState,
                     &'a reqwest::Client,
                     &'a tmdb_api::client::Client,
                 )
@@ -113,7 +119,8 @@ pub enum AppEvent {
     ),
     ContinuationIOFuture(
         Box<
-            dyn for<'a> FnOnce(
+            dyn for<'a, 'out> FnOnce(
+                    &'out mut AppState,
                     &'a reqwest::Client,
                     &'a tmdb_api::client::Client,
                     &'a tokio::sync::Mutex<Vec<Option<crate::multifs::MultiFs>>>,
@@ -153,19 +160,35 @@ pub struct AppState {
     pub tab: TabState,
     pub saved_movie_state: Option<MovieManagerState>,
     pub libraries: Vec<Option<Library>>,
+    pub config: crate::config::Configuration,
 }
 
 impl AppState {
     pub fn register_event(&mut self, evt: AppEvent) -> bool {
+        let sender = MESSAGE_SENDER.get().unwrap();
         match evt {
+            AppEvent::ContinuationFuture(builder) => {
+                sender.send(AppMessage::Future(builder)).unwrap();
+                true
+            }
+            AppEvent::ContinuationAppFuture(builder) => {
+                sender.send(AppMessage::AppFuture(builder)).unwrap();
+                true
+            }
+            AppEvent::ContinuationIOFuture(builder) => {
+                sender.send(AppMessage::IOFuture(builder)).unwrap();
+                true
+            }
+            AppEvent::ContinuationHttpFuture(builder) => {
+                sender.send(AppMessage::HttpFuture(builder)).unwrap();
+                true
+            }
             AppEvent::KeyEvent(kev) => {
                 if kev.code == KeyCode::Char('s') && kev.modifiers == KeyModifiers::ALT {
                     if let TabState::MovieManager(state) = &self.tab {
                         self.saved_movie_state = Some(state.clone());
                     }
                     self.tab = TabState::Settings(Default::default());
-                    use crate::MESSAGE_SENDER;
-                    let sender = MESSAGE_SENDER.get().unwrap();
                     sender
                         .send(crate::AppMessage::Future(Box::new(
                             |appstate: &mut AppState| {

@@ -29,6 +29,8 @@ const VIDEO_EXTENSIONS: &'static [&'static str] = &[
 ];
 pub static MESSAGE_SENDER: OnceLock<UnboundedSender<AppMessage>> = OnceLock::new();
 
+pub type ConnectionPool = tokio::sync::Mutex<Vec<Option<crate::multifs::MultiFs>>>;
+
 pub async fn download_file<'a, U>(
     lfs: &mut MultiFs,
     client: &reqwest::Client,

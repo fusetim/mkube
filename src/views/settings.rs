@@ -1,3 +1,10 @@
+use crate::library::{Library, LibraryFlavor, LibraryType};
+use crate::util::{OwnedSpan, OwnedSpans};
+use crate::views::widgets::{
+    Button, ButtonState, Checkbox, Input, LabelledCheckbox, LabelledCheckboxState, LabelledInput,
+    LabelledInputState,
+};
+use crate::{AppEvent, AppMessage, AppState, MultiFs, MESSAGE_SENDER};
 use crossterm::event::{KeyCode, KeyEvent};
 use std::path::PathBuf;
 use tui::widgets::{Block, Borders, List, ListItem, ListState, Paragraph, StatefulWidget, Widget};
@@ -7,14 +14,7 @@ use tui::{
     style::{Color, Modifier, Style},
     text::Span,
 };
-
-use crate::library::{Library, LibraryFlavor, LibraryType};
-use crate::util::{OwnedSpan, OwnedSpans};
-use crate::views::widgets::{
-    Button, ButtonState, Checkbox, Input, LabelledCheckbox, LabelledCheckboxState, LabelledInput,
-    LabelledInputState,
-};
-use crate::{AppEvent, AppMessage, AppState, MESSAGE_SENDER};
+use url::Url;
 
 #[derive(Clone, Debug)]
 pub struct SettingsPage {
@@ -151,6 +151,50 @@ impl StatefulWidget for SettingsPage {
     }
 }
 
+impl From<SettingsMessage> for AppMessage {
+    fn from(value: SettingsMessage) -> AppMessage {
+        match value {
+            SettingsMessage::OpenMenu => {
+                AppMessage::Closure(Box::new(|app_state: &mut AppState| {
+                    Some(AppEvent::SettingsEvent(SettingsEvent::OpenMenu(
+                        app_state.libraries.iter().flatten().cloned().collect(),
+                    )))
+                }))
+            }
+            SettingsMessage::EditExisting(_) | SettingsMessage::SaveLibrary(_) => {
+                AppMessage::SettingsMessage(value)
+            }
+            SettingsMessage::TestLibrary(lib) => AppMessage::Future(Box::new(|_| {
+                Box::pin(async move {
+                    let rst = match MultiFs::try_from(&lib) {
+                        Ok(mut conn) => {
+                            let _ = conn.as_mut_rfs().connect();
+                            (
+                                conn.as_mut_rfs().is_connected(),
+                                conn.as_mut_rfs()
+                                    .exists(&lib.path.as_path())
+                                    .unwrap_or(false),
+                            )
+                        }
+                        Err(err) => {
+                            log::warn!(
+                                "Connection to library `{}` failed due to:\n{:?}",
+                                Url::try_from(&lib)
+                                    .as_ref()
+                                    .map(Url::as_ref)
+                                    .unwrap_or("N/A"),
+                                err
+                            );
+                            (false, false)
+                        }
+                    };
+                    Some(AppEvent::SettingsEvent(SettingsEvent::ConnTestResult(rst)))
+                })
+            })),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct SettingsMenu {}
 
@@ -247,9 +291,7 @@ impl SettingsMenuState {
                             }
                             MenuItemType::ExistingLibrary(l) => {
                                 sender
-                                    .send(AppMessage::SettingsMessage(
-                                        SettingsMessage::EditExisting(l.clone()),
-                                    ))
+                                    .send(SettingsMessage::EditExisting(l.clone()).into())
                                     .unwrap();
                             }
                         }
@@ -299,7 +341,7 @@ impl From<Library> for MenuItem {
                 let _ = u.set_password(None);
                 return u.to_string();
             })
-            .unwrap_or("N/A".into());
+            .unwrap_or(l.to_string());
         MenuItem::new(format!("{} ({})", &l.name, url))
             .selectable(true)
             .set_type(MenuItemType::ExistingLibrary(l))
@@ -580,9 +622,7 @@ impl SettingsEditState {
                         },
                     };
                     sender
-                        .send(AppMessage::SettingsMessage(SettingsMessage::SaveLibrary(
-                            library,
-                        )))
+                        .send(SettingsMessage::SaveLibrary(library).into())
                         .unwrap();
                 } else if self.test.is_clicked() {
                     let sender = MESSAGE_SENDER.get().unwrap();
@@ -600,9 +640,7 @@ impl SettingsEditState {
                         },
                     };
                     sender
-                        .send(AppMessage::SettingsMessage(SettingsMessage::TestLibrary(
-                            library,
-                        )))
+                        .send(SettingsMessage::TestLibrary(library).into())
                         .unwrap();
                 }
                 true
