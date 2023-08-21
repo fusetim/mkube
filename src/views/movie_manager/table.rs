@@ -203,7 +203,10 @@ impl MovieTableState {
             }
             AppEvent::MovieManagerEvent(MovieManagerEvent::MovieDiscovered(movie)) => {
                 self.is_loading = false;
-                self.movies.push(movie);
+                match self.movies.binary_search_by_key(&&movie.0.title, |m| &m.0.title) {
+                    Ok(i) => self.movies.insert(i, movie),
+                    Err(i) => self.movies.insert(i, movie),
+                }
                 true
             }
             AppEvent::MovieManagerEvent(MovieManagerEvent::MovieUpdated((movie, fs_id, path))) => {
