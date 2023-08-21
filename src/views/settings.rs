@@ -557,7 +557,7 @@ impl SettingsEditState {
                     sender
                         .send(crate::AppMessage::Future(Box::new(
                             |appstate: &mut AppState| {
-                                let libs = appstate.libraries.clone();
+                                let libs = appstate.libraries.iter().flatten().cloned().collect();
                                 Box::pin(async move {
                                     Some(AppEvent::SettingsEvent(SettingsEvent::OpenMenu(libs)))
                                 })

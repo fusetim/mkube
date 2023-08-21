@@ -15,7 +15,6 @@ pub mod settings;
 pub mod widgets;
 
 use crate::library::Library;
-use crate::multifs::MultiFs;
 use movie_manager::{MovieManager, MovieManagerEvent, MovieManagerMessage, MovieManagerState};
 use settings::{SettingsMessage, SettingsPage, SettingsState};
 
@@ -78,19 +77,11 @@ impl Default for TabState {
 pub struct AppState {
     pub tab: TabState,
     pub saved_movie_state: Option<MovieManagerState>,
-    pub frame_number: usize,
-    pub events: Vec<AppEvent>,
-    pub libraries: Vec<Library>,
-    pub conns: Vec<MultiFs>,
+    pub libraries: Vec<Option<Library>>,
 }
 
 impl AppState {
-    pub fn tick(&mut self) {
-        self.frame_number += 1;
-    }
-
     pub fn register_event(&mut self, evt: AppEvent) -> bool {
-        self.events.push(evt.clone());
         match evt {
             AppEvent::KeyEvent(kev) => {
                 if kev.code == KeyCode::Char('s') && kev.modifiers == KeyModifiers::ALT {
@@ -103,7 +94,7 @@ impl AppState {
                     sender
                         .send(crate::AppMessage::Future(Box::new(
                             |appstate: &mut AppState| {
-                                let libs = appstate.libraries.clone();
+                                let libs = appstate.libraries.iter().flatten().cloned().collect();
                                 Box::pin(async move {
                                     Some(AppEvent::SettingsEvent(
                                         settings::SettingsEvent::OpenMenu(libs),
@@ -140,10 +131,6 @@ impl AppState {
                 }
             }
         }
-    }
-
-    pub fn clear_events(&mut self) {
-        self.events.clear();
     }
 }
 

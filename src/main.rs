@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use std::io;
 use tmdb_api::client::Client as TmdbClient;
 use tokio::io::AsyncWriteExt;
-use tokio::sync::mpsc::unbounded_channel;
+use tokio::sync::{mpsc::unbounded_channel, Mutex};
 use tokio::time::{self, Duration};
 use url::Url;
 
@@ -144,6 +144,7 @@ where
     let (sender, mut receiver) = unbounded_channel();
     let tmdb_client = TmdbClient::new("74a673b58f22dd90b8ac750b62e00b0b".into());
     let http_client = reqwest::Client::new();
+    let mut conns: Mutex<Vec<Option<MultiFs>>> = Mutex::new(Vec::new());
     let keyring;
     #[cfg(feature = "secrets")]
     {
@@ -173,7 +174,7 @@ where
             .unlock()
             .await
             .map_err(|err| anyhow!("Failed to unlock keyring, causes:\n{:?}", err))?;
-        for lib in cfg.libraries.iter_mut() {
+        for lib in cfg.libraries.iter_mut().flatten() {
             if let Credentials::ToKeyring(c) = lib.password.clone() {
                 let path = lib.path.display().to_string();
                 let attributes = HashMap::from([
@@ -195,7 +196,7 @@ where
             .await
             .map_err(|err| anyhow!("Failed to lock keyring, causes:\n{:?}", err))?;
     }
-    for lib in &cfg.libraries {
+    for lib in cfg.libraries.iter().flatten() {
         let lib_;
         #[cfg(feature = "secrets")]
         {
@@ -211,11 +212,11 @@ where
             if !conn.as_mut_rfs().is_connected() {
                 let _ = conn.as_mut_rfs().connect();
             }
-            state.conns.push(conn);
+            conns.get_mut().push(Some(conn));
             if cfg!(feature = "secrets") {
-                state.libraries.push(lib_);
+                state.libraries.push(Some(lib_));
             } else {
-                state.libraries.push(lib_);
+                state.libraries.push(Some(lib_));
             }
         }
     }
@@ -225,13 +226,10 @@ where
 
         tokio::select! {
             _ = tick.tick() => {
-                //println!("tick!");
-                state.tick();
                 terminal.draw(|f| {
                     let size = f.size();
                     f.render_stateful_widget(app.clone(), size, &mut state);
                 })?;
-                state.clear_events();
             }
             maybe_event = event => {
                 match maybe_event {
@@ -265,13 +263,14 @@ where
                             state.register_event(evt);
                         },
                         AppMessage::SettingsMessage(SettingsMessage::OpenMenu) => {
-                            state.register_event(AppEvent::SettingsEvent(SettingsEvent::OpenMenu(state.libraries.clone())));
+                            state.register_event(AppEvent::SettingsEvent(SettingsEvent::OpenMenu(state.libraries.iter().flatten().cloned().collect())));
                         },
                         AppMessage::SettingsMessage(SettingsMessage::EditExisting(lib)) => {
-                            if let Some((ind, _)) = state.libraries.iter().enumerate().filter(|(_, l)| &&lib == l).next() {
-                                let l = state.libraries.swap_remove(ind);
-                                let _ = cfg.libraries.swap_remove(ind);
-                                let _ = state.conns.swap_remove(ind);
+                            if let Some((ind, _)) = state.libraries.iter().enumerate().filter(|(_, l)| l.is_some() && l.as_ref().unwrap() == &lib).next() {
+                                let l = state.libraries[ind].clone().unwrap();
+                                state.libraries[ind] = None;
+                                cfg.libraries[ind] = None;
+                                conns.lock().await[ind] = None;
                                 state.register_event(AppEvent::SettingsEvent(SettingsEvent::EditExisting(l)));
                             } else {
                                 log::error!("Invalid library editing, message ignored.");
@@ -280,21 +279,21 @@ where
                         AppMessage::SettingsMessage(SettingsMessage::SaveLibrary(lib)) => {
                             if let Ok(mut conn) = MultiFs::try_from(&lib) {
                                 if !conn.as_mut_rfs().is_connected() { let _ = conn.as_mut_rfs().connect(); }
-                                state.conns.push(conn);
-                                state.libraries.push(lib.clone());
+                                conns.lock().await.push(Some(conn));
+                                state.libraries.push(Some(lib.clone()));
                                 #[cfg(feature = "secrets")]
                                 {
-                                    cfg.libraries.push(ConfigLibrary::from_with_keyring(lib, &keyring).await);
+                                    cfg.libraries.push(Some(ConfigLibrary::from_with_keyring(lib, &keyring).await));
                                 }
                                 #[cfg(not(feature = "secrets"))]
                                 {
-                                    cfg.libraries.push(lib.into());
+                                    cfg.libraries.push(Some(lib.into()));
                                 }
                                 if let Err(err) = confy::store(APP_NAME, CONFIG_NAME, &cfg) {
                                     log::error!("Failed to save configuration, causes:\n{:?}", err);
                                 }
                             }
-                            state.register_event(AppEvent::SettingsEvent(SettingsEvent::OpenMenu(state.libraries.clone())));
+                            state.register_event(AppEvent::SettingsEvent(SettingsEvent::OpenMenu(state.libraries.iter().flatten().cloned().collect())));
                         },
                         AppMessage::SettingsMessage(SettingsMessage::TestLibrary(lib)) => {
                             let rst = match MultiFs::try_from(&lib) {
@@ -311,14 +310,18 @@ where
                         },
                         AppMessage::MovieManagerMessage(MovieManagerMessage::RefreshMovies) => {
                             state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::ClearMovieList));
-                            for i in 0..state.conns.len() {
-                                let _ = state.conns[i].as_mut_rfs().connect();
-                                if state.conns[i].as_mut_rfs().is_connected() {
-                                    match mkube::analyze_library(&mut state.conns[i], state.libraries[i].path.clone(), 2).await {
+                            let mut conns_lock = conns.lock().await;
+                            for i in 0..conns_lock.len() {
+                                if conns_lock[i].is_none() {
+                                    continue;
+                                }
+                                let _ = conns_lock[i].as_mut().unwrap().as_mut_rfs().connect();
+                                if conns_lock[i].as_mut().unwrap().as_mut_rfs().is_connected() {
+                                    match mkube::analyze_library(conns_lock[i].as_mut().unwrap(), state.libraries[i].as_ref().unwrap().path.clone(), 2).await {
                                         Ok(paths) => {
                                             for path in paths {
                                                 let placeholder_title = format!("{}", path.file_name().map(|s| s.to_string_lossy().replace(&['.', '_'], " ")).unwrap_or("Invalid file name.".into()));
-                                                let movie = mkube::try_open_nfo(&mut state.conns[i], path.clone()).await.unwrap_or_else(|_| {
+                                                let movie = mkube::try_open_nfo(conns_lock[i].as_mut().unwrap(), path.clone()).await.unwrap_or_else(|_| {
                                                     mkube::nfo::Movie {
                                                         title: placeholder_title,
                                                         ..Default::default()
@@ -328,7 +331,7 @@ where
                                             }
                                         },
                                         Err(err) => {
-                                            log::error!("Failed to analyze library `{}` due to:\n{:?}", Url::try_from(& state.libraries[i]).as_ref().map(Url::as_ref).unwrap_or("N/A"), err);
+                                            log::error!("Failed to analyze library `{}` due to:\n{:?}", Url::try_from(state.libraries[i].as_ref().unwrap()).as_ref().map(Url::as_ref).unwrap_or("N/A"), err);
                                         }
                                     }
                                 }
@@ -348,8 +351,13 @@ where
                         AppMessage::MovieManagerMessage(MovieManagerMessage::CreateNfo((id, fs_id, mut path))) => {
                             use std::io::Cursor;
                             use std::io::Seek;
+                            let mut conns_lock = conns.lock().await;
+                            if conns_lock[fs_id].is_none() {
+                                log::error!("NFO creatioon failed because fs_id {} does not exist anymore.", fs_id);
+                                continue;
+                            }
                             let mut movie_nfo = mkube::transform_as_nfo(&tmdb_client, id, Some(cfg.tmdb_preferences.prefered_lang.clone())).await?;
-                            let mt = mkube::get_metadata(&mut state.conns[fs_id], (&state.libraries[fs_id]).try_into().expect("Cannot get a baseURL from library."), path.clone()).await?;
+                            let mt = mkube::get_metadata(conns_lock[fs_id].as_mut().unwrap(), (state.libraries[fs_id].as_ref().unwrap()).try_into().expect("Cannot get a baseURL from library."), path.clone()).await?;
                             movie_nfo.fileinfo = Some(mt);
                             let nfo_string = quick_xml::se::to_string(&movie_nfo).expect("Failed to produce a valid nfo file.");
                             let movie_path= path.clone();
@@ -359,12 +367,17 @@ where
                             buf.write_all(br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>"#).await?;
                             buf.write_all(nfo_string.as_bytes()).await?;
                             let _ = buf.rewind();
-                            let _ = state.conns[fs_id].as_mut_rfs().create_file(&path, &Metadata::default(), Box::new(buf))
+                            let _ = conns_lock[fs_id].as_mut().unwrap().as_mut_rfs().create_file(&path, &Metadata::default(), Box::new(buf))
                                 .map_err(|err| anyhow!("Can't open the nfo file., causes:\n{:?}", err))?;
                             state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::OpenTable));
                             state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::MovieUpdated((movie_nfo, fs_id, movie_path))));
                         },
                         AppMessage::MovieManagerMessage(MovieManagerMessage::SaveNfo((movie_nfo, fs_id, mut path))) => {
+                            let mut conns_lock = conns.lock().await;
+                            if conns_lock[fs_id].is_none() {
+                                log::error!("Failed to save NFO on fs (id: {}), as it does not exist anymore.", fs_id);
+                                continue;
+                            }
                             use std::io::Cursor;
                             use std::io::Seek;
                             let nfo_string = quick_xml::se::to_string(&movie_nfo).expect("Failed to produce a valid nfo file.");
@@ -375,12 +388,17 @@ where
                             buf.write_all(br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>"#).await?;
                             buf.write_all(nfo_string.as_bytes()).await?;
                             let _ = buf.rewind();
-                            let _ = state.conns[fs_id].as_mut_rfs().create_file(&path, &Metadata::default(), Box::new(buf))
+                            let _ = conns_lock[fs_id].as_mut().unwrap().as_mut_rfs().create_file(&path, &Metadata::default(), Box::new(buf))
                                 .map_err(|err| anyhow!("Can't open the nfo file., causes:\n{:?}", err))?;
                             state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::OpenTable));
                             state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::MovieUpdated((movie_nfo, fs_id, movie_path))));
                         },
                         AppMessage::MovieManagerMessage(MovieManagerMessage::RetrieveArtworks((movie_nfo, fs_id, path))) => {
+                            let mut conns_lock = conns.lock().await;
+                            if conns_lock[fs_id].is_none() {
+                                log::error!("Failed to retrieve artworks on fs (id: {}), as it does not exist anymore.", fs_id);
+                                continue;
+                            }
                             for th in movie_nfo.thumb {
                                 if let Some(mut aspect) = th.aspect.clone() {
                                     if aspect == "landscape" { aspect = "fanart".into() }
@@ -389,7 +407,7 @@ where
                                     } else {
                                         path.with_file_name(&aspect)
                                     };
-                                    match mkube::download_file(&mut state.conns[fs_id], &http_client, output, &*format!("https://image.tmdb.org/t/p/original{}", &th.path)).await {
+                                    match mkube::download_file(conns_lock[fs_id].as_mut().unwrap(), &http_client, output, &*format!("https://image.tmdb.org/t/p/original{}", &th.path)).await {
                                         Ok(()) => {},
                                         Err(err) => { log::error!("Failed to download {} ({}) for {}. Cause:\n{:?}", &aspect, &th.path, &movie_nfo.title, err); },
                                     }

@@ -9,11 +9,37 @@ use std::path::PathBuf;
 use oo7::Keyring;
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize, Default)]
+#[serde(from = "FileConfiguration")]
+#[serde(into = "FileConfiguration")]
 pub struct Configuration {
+    pub libraries: Vec<Option<ConfigLibrary>>,
+    pub tmdb_preferences: TmdbPreferences,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize, Default)]
+struct FileConfiguration {
     #[serde(default)]
     pub libraries: Vec<ConfigLibrary>,
     #[serde(default)]
     pub tmdb_preferences: TmdbPreferences,
+}
+
+impl From<FileConfiguration> for Configuration {
+    fn from(value: FileConfiguration) -> Self {
+        Self {
+            libraries: value.libraries.into_iter().map(Option::from).collect(),
+            tmdb_preferences: value.tmdb_preferences,
+        }
+    }
+}
+
+impl From<Configuration> for FileConfiguration {
+    fn from(value: Configuration) -> Self {
+        Self {
+            libraries: value.libraries.into_iter().flatten().collect(),
+            tmdb_preferences: value.tmdb_preferences,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
