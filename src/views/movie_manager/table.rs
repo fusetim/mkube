@@ -4,8 +4,9 @@ use tui::{
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
+    text::{Span, Spans},
     widgets::{
-        Block, BorderType, Borders, Paragraph, Row, StatefulWidget, Table, TableState, Widget,
+        Block, BorderType, Borders, Paragraph, Row, StatefulWidget, Table, TableState, Widget, Wrap,
     },
 };
 
@@ -32,8 +33,65 @@ impl StatefulWidget for MovieTable {
             return;
         }
         if state.movies.len() == 0 {
-            Paragraph::new("No movie found. You might need to refresh the list? Ctrl+Shift+R")
-                .render(area, buf);
+            Paragraph::new(vec![
+                Spans::from(Span::styled(
+                    "No movie found. You might need to relooad the libraries (press 'r').",
+                    Style::default().fg(Color::Yellow),
+                )),
+                Spans::from(vec![]),
+                Spans::from(Span::styled(
+                    " TIPS: ",
+                    Style::default().fg(Color::White).bg(Color::Magenta),
+                )),
+                Spans::from(vec![]),
+                Spans::from(vec![
+                    Span::styled(" r ", Style::default().fg(Color::White).bg(Color::Magenta)),
+                    Span::raw(" Reload libraries"),
+                    Span::raw("    "),
+                    Span::styled(" s ", Style::default().fg(Color::White).bg(Color::Magenta)),
+                    Span::raw(" Search movie (on TMDB)"),
+                    Span::raw("    "),
+                    Span::styled(" e ", Style::default().fg(Color::White).bg(Color::Magenta)),
+                    Span::raw(" Edit movie NFO"),
+                    Span::raw("    "),
+                    Span::styled(" a ", Style::default().fg(Color::White).bg(Color::Magenta)),
+                    Span::raw(" Download artworks"),
+                    Span::raw("    "),
+                    Span::styled(
+                        " t/b/d/u/w ",
+                        Style::default().fg(Color::White).bg(Color::Magenta),
+                    ),
+                    Span::raw(" Set source as TV/Bluray/DVD/4K Bluray/WEB"),
+                    Span::raw("    "),
+                ]),
+                Spans::from(vec![
+                    Span::styled(
+                        " (Shift+)TAB ",
+                        Style::default().fg(Color::White).bg(Color::Magenta),
+                    ),
+                    Span::raw(" Focus previous/next input (or line)"),
+                    Span::raw("    "),
+                    Span::styled(
+                        " Enter ",
+                        Style::default().fg(Color::White).bg(Color::Magenta),
+                    ),
+                    Span::raw(" Click button / Next column"),
+                    Span::raw("    "),
+                    Span::styled(
+                        " PageUp/PageDown ",
+                        Style::default().fg(Color::White).bg(Color::Magenta),
+                    ),
+                    Span::raw(" First/Last character"),
+                    Span::raw("    "),
+                    Span::styled(
+                        " Arrows ",
+                        Style::default().fg(Color::White).bg(Color::Magenta),
+                    ),
+                    Span::raw(" Move between chars / lines / items"),
+                ]),
+            ])
+            .wrap(Wrap { trim: true })
+            .render(area, buf);
             return;
         }
 
@@ -203,7 +261,10 @@ impl MovieTableState {
             }
             AppEvent::MovieManagerEvent(MovieManagerEvent::MovieDiscovered(movie)) => {
                 self.is_loading = false;
-                match self.movies.binary_search_by_key(&&movie.0.title, |m| &m.0.title) {
+                match self
+                    .movies
+                    .binary_search_by_key(&&movie.0.title, |m| &m.0.title)
+                {
                     Ok(i) => self.movies.insert(i, movie),
                     Err(i) => self.movies.insert(i, movie),
                 }
