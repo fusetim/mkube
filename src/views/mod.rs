@@ -21,7 +21,40 @@ use settings::{SettingsMessage, SettingsPage, SettingsState};
 pub enum AppMessage {
     Future(
         Box<
-            dyn FnOnce(&mut AppState) -> Pin<Box<dyn Future<Output = Option<AppEvent>>>>
+            dyn FnOnce(&mut AppState) -> Pin<Box<dyn Future<Output = Option<AppEvent>> + Send>>
+                + Send
+                + Sync,
+        >,
+    ),
+    AppFuture(
+        Box<
+            dyn for<'a> FnOnce(
+                    &'a mut AppState,
+                )
+                    -> Pin<Box<dyn Future<Output = Option<AppEvent>> + Send + 'a>>
+                + Send
+                + Sync,
+        >,
+    ),
+    HttpFuture(
+        Box<
+            dyn for<'a> FnOnce(
+                    &'a reqwest::Client,
+                    &'a tmdb_api::client::Client,
+                )
+                    -> Pin<Box<dyn Future<Output = Option<AppEvent>> + Send + 'a>>
+                + Send
+                + Sync,
+        >,
+    ),
+    IOFuture(
+        Box<
+            dyn for<'a> FnOnce(
+                    &'a reqwest::Client,
+                    &'a tmdb_api::client::Client,
+                    &'a tokio::sync::Mutex<Vec<Option<crate::multifs::MultiFs>>>,
+                )
+                    -> Pin<Box<dyn Future<Output = Option<AppEvent>> + 'a>>
                 + Send
                 + Sync,
         >,
@@ -37,7 +70,10 @@ impl std::fmt::Debug for AppMessage {
         match self {
             AppMessage::Close => write!(f, "AppMessage::Close"),
             AppMessage::Future(_) => write!(f, "AppMessage::Future(<builder>)"),
-            AppMessage::TriggerEvent(evt) => write!(f, "AppMessage::TriggerEvent({:?})", evt),
+            AppMessage::AppFuture(_) => write!(f, "AppMessage::AppFuture(<builder>)"),
+            AppMessage::IOFuture(_) => write!(f, "AppMessage::IOFuture(<builder>)"),
+            AppMessage::HttpFuture(_) => write!(f, "AppMessage::HttpFuture(<builder>)"),
+            AppMessage::TriggerEvent(_) => write!(f, "AppMessage::TriggerEvent(...)"),
             AppMessage::SettingsMessage(msg) => write!(f, "AppMessage::SettingsMessage({:?})", msg),
             AppMessage::MovieManagerMessage(msg) => {
                 write!(f, "AppMessage::MovieManagerMessage({:?})", msg)
@@ -46,8 +82,47 @@ impl std::fmt::Debug for AppMessage {
     }
 }
 
-#[derive(Debug, Clone)]
 pub enum AppEvent {
+    ContinuationFuture(
+        Box<
+            dyn FnOnce(&mut AppState) -> Pin<Box<dyn Future<Output = Option<AppEvent>> + Send>>
+                + Send
+                + Sync,
+        >,
+    ),
+    ContinuationAppFuture(
+        Box<
+            dyn for<'a> FnOnce(
+                    &'a mut AppState,
+                )
+                    -> Pin<Box<dyn Future<Output = Option<AppEvent>> + Send + 'a>>
+                + Send
+                + Sync,
+        >,
+    ),
+    ContinuationHttpFuture(
+        Box<
+            dyn for<'a> FnOnce(
+                    &'a reqwest::Client,
+                    &'a tmdb_api::client::Client,
+                )
+                    -> Pin<Box<dyn Future<Output = Option<AppEvent>> + Send + 'a>>
+                + Send
+                + Sync,
+        >,
+    ),
+    ContinuationIOFuture(
+        Box<
+            dyn for<'a> FnOnce(
+                    &'a reqwest::Client,
+                    &'a tmdb_api::client::Client,
+                    &'a tokio::sync::Mutex<Vec<Option<crate::multifs::MultiFs>>>,
+                )
+                    -> Pin<Box<dyn Future<Output = Option<AppEvent>> + 'a>>
+                + Send
+                + Sync,
+        >,
+    ),
     KeyEvent(KeyEvent),
     SettingsEvent(settings::SettingsEvent),
     MovieManagerEvent(MovieManagerEvent),
@@ -114,9 +189,9 @@ impl AppState {
                         true
                     }
                 } else if let TabState::Settings(ref mut state) = self.tab {
-                    state.press_key(kev.clone())
+                    state.press_key(kev)
                 } else if let TabState::MovieManager(ref mut state) = self.tab {
-                    state.input(evt.clone())
+                    state.input(evt)
                 } else {
                     false
                 }

@@ -6,6 +6,7 @@ use std::io;
 use tmdb_api::client::Client as TmdbClient;
 use tokio::io::AsyncWriteExt;
 use tokio::sync::{mpsc::unbounded_channel, Mutex};
+use tokio::task::JoinSet;
 use tokio::time::{self, Duration};
 use url::Url;
 
@@ -24,6 +25,7 @@ use oo7::Keyring;
 use mkube::config::{ConfigLibrary, Credentials};
 use mkube::multifs;
 use mkube::views;
+use mkube::views::{AppEvent, AppMessage};
 
 use multifs::MultiFs;
 
@@ -142,9 +144,11 @@ where
         );
     })?;
     let (sender, mut receiver) = unbounded_channel();
-    let tmdb_client = TmdbClient::new("74a673b58f22dd90b8ac750b62e00b0b".into());
-    let http_client = reqwest::Client::new();
-    let mut conns: Mutex<Vec<Option<MultiFs>>> = Mutex::new(Vec::new());
+    let tmdb_client: &'static TmdbClient = Box::leak(Box::new(TmdbClient::new(
+        "74a673b58f22dd90b8ac750b62e00b0b".into(),
+    )));
+    let http_client: &'static reqwest::Client = Box::leak(Box::new(reqwest::Client::new()));
+    let conns: &'static Mutex<Vec<Option<MultiFs>>> = Box::leak(Box::new(Mutex::new(Vec::new())));
     let keyring;
     #[cfg(feature = "secrets")]
     {
@@ -155,7 +159,7 @@ where
         keyring = ()
     }
     mkube::MESSAGE_SENDER
-        .set(sender)
+        .set(sender.clone())
         .map_err(|err| anyhow!("Failed to init MESSAGE_SENDER, causes:\n{:?}", err))?;
     let mut cfg: mkube::config::Configuration = confy::load(APP_NAME, CONFIG_NAME)?;
     let app = views::App {
@@ -164,6 +168,7 @@ where
     };
     let mut state = views::AppState::default();
     let mut event_reader = EventStream::new();
+    let mut pending_futures: JoinSet<Option<AppEvent>> = JoinSet::new();
     let tick = time::interval(Duration::from_millis(1000 / 15));
     tokio::pin!(tick);
 
@@ -196,27 +201,30 @@ where
             .await
             .map_err(|err| anyhow!("Failed to lock keyring, causes:\n{:?}", err))?;
     }
-    for lib in cfg.libraries.iter().flatten() {
-        let lib_;
-        #[cfg(feature = "secrets")]
-        {
-            lib_ = ConfigLibrary::try_into_with_keyring(lib.clone(), &keyring).await?;
-        }
-
-        #[cfg(not(feature = "secrets"))]
-        {
-            lib_ = ConfigLibrary::into(lib.clone());
-        }
-
-        if let Ok(mut conn) = MultiFs::try_from(&lib_) {
-            if !conn.as_mut_rfs().is_connected() {
-                let _ = conn.as_mut_rfs().connect();
+    {
+        let mut conns_lock = conns.lock().await;
+        for lib in cfg.libraries.iter().flatten() {
+            let lib_;
+            #[cfg(feature = "secrets")]
+            {
+                lib_ = ConfigLibrary::try_into_with_keyring(lib.clone(), &keyring).await?;
             }
-            conns.get_mut().push(Some(conn));
-            if cfg!(feature = "secrets") {
-                state.libraries.push(Some(lib_));
-            } else {
-                state.libraries.push(Some(lib_));
+
+            #[cfg(not(feature = "secrets"))]
+            {
+                lib_ = ConfigLibrary::into(lib.clone());
+            }
+
+            if let Ok(mut conn) = MultiFs::try_from(&lib_) {
+                if !conn.as_mut_rfs().is_connected() {
+                    let _ = conn.as_mut_rfs().connect();
+                }
+                conns_lock.push(Some(conn));
+                if cfg!(feature = "secrets") {
+                    state.libraries.push(Some(lib_));
+                } else {
+                    state.libraries.push(Some(lib_));
+                }
             }
         }
     }
@@ -255,9 +263,33 @@ where
                     use mkube::{ views::movie_manager::{MovieManagerEvent, MovieManagerMessage}};
                     match msg {
                         AppMessage::Future(builder) => {
-                            if let Some(app_event) = builder(&mut state).await {
-                                state.register_event(app_event);
+                            let _ = pending_futures.spawn(builder(&mut state));
+                        },
+                        AppMessage::AppFuture(builder) => {
+                            match builder(&mut state).await {
+                                Some(AppEvent::ContinuationFuture(builder)) => {
+                                    sender.send(AppMessage::Future(builder)).unwrap();
+                                },
+                                Some(AppEvent::ContinuationAppFuture(builder)) => {
+                                    sender.send(AppMessage::AppFuture(builder)).unwrap();
+                                },
+                                Some(AppEvent::ContinuationIOFuture(builder)) => {
+                                    sender.send(AppMessage::IOFuture(builder)).unwrap();
+                                },
+                                Some(AppEvent::ContinuationHttpFuture(builder)) => {
+                                    sender.send(AppMessage::HttpFuture(builder)).unwrap();
+                                },
+                                Some(other) => {
+                                    state.register_event(other);
+                                },
+                                None => {},
                             }
+                        },
+                        AppMessage::IOFuture(builder) => {
+                            let _ = pending_futures.spawn_local(builder(&http_client, &tmdb_client, &conns));
+                        },
+                        AppMessage::HttpFuture(builder) => {
+                            let _ = pending_futures.spawn(builder(&http_client, &tmdb_client));
                         },
                         AppMessage::TriggerEvent(evt) => {
                             state.register_event(evt);
@@ -422,6 +454,34 @@ where
                 } else {
                     break;
                 }
+            },
+            task = pending_futures.join_next(), if !pending_futures.is_empty() => match task {
+                Some(task) => match task {
+                    Ok(msg) => match msg {
+                        Some(AppEvent::ContinuationFuture(builder)) => {
+                            sender.send(AppMessage::Future(builder)).unwrap();
+                        },
+                        Some(AppEvent::ContinuationAppFuture(builder)) => {
+                            sender.send(AppMessage::AppFuture(builder)).unwrap();
+                        },
+                        Some(AppEvent::ContinuationIOFuture(builder)) => {
+                            sender.send(AppMessage::IOFuture(builder)).unwrap();
+                        },
+                        Some(AppEvent::ContinuationHttpFuture(builder)) => {
+                            sender.send(AppMessage::HttpFuture(builder)).unwrap();
+                        },
+                        Some(other) => {
+                            state.register_event(other);
+                        },
+                        None => {},
+                    },
+                    Err(err) => {
+                        log::error!("pending_futures has returned an error:\n{:?}", err);
+                    },
+                },
+                None => {
+                    log::warn!("pending_futures is empty but still has been processed! This is a BUG!");
+                },
             }
         }
     }
