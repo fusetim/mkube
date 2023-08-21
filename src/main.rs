@@ -317,7 +317,7 @@ where
                                     match mkube::analyze_library(&mut state.conns[i], state.libraries[i].path.clone(), 2).await {
                                         Ok(paths) => {
                                             for path in paths {
-                                                let placeholder_title = format!("{}", path.file_name().map(|s| s.to_string_lossy().to_owned()).unwrap_or("Invalid file name.".into()));
+                                                let placeholder_title = format!("{}", path.file_name().map(|s| s.to_string_lossy().replace(&['.', '_'], " ")).unwrap_or("Invalid file name.".into()));
                                                 let movie = mkube::try_open_nfo(&mut state.conns[i], path.clone()).await.unwrap_or_else(|_| {
                                                     mkube::nfo::Movie {
                                                         title: placeholder_title,
