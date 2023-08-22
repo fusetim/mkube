@@ -14,8 +14,8 @@ use crate::views::movie_manager::{
     details::MovieSearchDetails, MovieManagerEvent, MovieManagerMessage,
 };
 use crate::views::widgets::{Button, ButtonState, Input, InputState};
+use crate::AppEvent;
 use crate::MESSAGE_SENDER;
-use crate::{AppEvent, AppMessage};
 
 #[derive(Clone, Debug)]
 pub struct MovieSearch {

@@ -1,10 +1,8 @@
 use anyhow::{anyhow, Result};
 use futures_util::{FutureExt, StreamExt};
-use remotefs::fs::Metadata;
 use std::collections::HashMap;
 use std::io;
 use tmdb_api::client::Client as TmdbClient;
-use tokio::io::AsyncWriteExt;
 use tokio::sync::{mpsc::unbounded_channel, Mutex};
 use tokio::task::JoinSet;
 use tokio::time::{self, Duration};
@@ -264,7 +262,7 @@ where
             msg = receiver.recv() => {
                 if let Some(msg) = msg {
                     use mkube::{AppMessage, AppEvent, views::settings::{SettingsMessage, SettingsEvent}};
-                    use mkube::{ views::movie_manager::{MovieManagerEvent, MovieManagerMessage}};
+                    use mkube::{ views::movie_manager::{MovieManagerMessage}};
                     match msg {
                         AppMessage::Closure(closure) => {
                             for evt in closure(&mut state) {
@@ -287,9 +285,6 @@ where
                         },
                         AppMessage::TriggerEvent(evt) => {
                             state.register_event(evt);
-                        },
-                        AppMessage::SettingsMessage(SettingsMessage::OpenMenu) => {
-                            panic!("Deprecated!");
                         },
                         AppMessage::SettingsMessage(SettingsMessage::EditExisting(lib)) => {
                             if let Some((ind, _)) = state.libraries.iter().enumerate().filter(|(_, l)| l.is_some() && l.as_ref().unwrap() == &lib).next() {
@@ -322,49 +317,13 @@ where
                             }
                             state.register_event(AppEvent::SettingsEvent(SettingsEvent::OpenMenu(state.libraries.iter().flatten().cloned().collect())));
                         },
-                        AppMessage::SettingsMessage(SettingsMessage::TestLibrary(_)) => {
-                            panic!("Deprecated!");
-                        },
-                        AppMessage::MovieManagerMessage(MovieManagerMessage::RefreshMovies) => {
-                            //state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::ClearMovieList));
-                            //let mut conns_lock = conns.lock().await;
-                            //for i in 0..conns_lock.len() {
-                            //    if conns_lock[i].is_none() || state.libraries[i].is_none(){
-                            //        continue;
-                            //    }
-                            //    let _ = conns_lock[i].as_mut().unwrap().as_mut_rfs().connect();
-                            //    if conns_lock[i].as_mut().unwrap().as_mut_rfs().is_connected() {
-                            //        match mkube::analyze_library(conns_lock[i].as_mut().unwrap(), state.libraries[i].as_ref().unwrap().path.clone(), 2).await {
-                            //            Ok(paths) => {
-                            //                for path in paths {
-                            //                    let placeholder_title = format!("{}", path.file_name().map(|s| s.to_string_lossy().replace(&['.', '_'], " ")).unwrap_or("Invalid file name.".into()));
-                            //                    let movie = mkube::try_open_nfo(conns_lock[i].as_mut().unwrap(), path.clone()).await.unwrap_or_else(|_| {
-                            //                        mkube::nfo::Movie {
-                            //                            title: placeholder_title,
-                            //                            ..Default::default()
-                            //                        }
-                            //                    });
-                            //                    state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::MovieDiscovered((movie, i, path))));
-                            //                }
-                            //            },
-                            //            Err(err) => {
-                            //                log::error!("Failed to analyze library `{}` due to:\n{:?}", state.libraries[i].as_ref().unwrap(), err);
-                            //            }
-                            //        }
-                            //    }
-                            //}
-                            todo!()
-                        },
-                        AppMessage::MovieManagerMessage(MovieManagerMessage::SearchTitle(_)) => {
-                            panic!("Deprecated");
-                        },
-                        AppMessage::MovieManagerMessage(MovieManagerMessage::CreateNfo(_)) => {
-                            panic!("Deprecated");
-                        },
-                        AppMessage::MovieManagerMessage(MovieManagerMessage::SaveNfo(_)) => {
-                            panic!("Deprecated");
-                        },
-                        AppMessage::MovieManagerMessage(MovieManagerMessage::RetrieveArtworks(_)) => {
+                        AppMessage::SettingsMessage(SettingsMessage::OpenMenu)
+                        | AppMessage::SettingsMessage(SettingsMessage::TestLibrary(_))
+                        | AppMessage::MovieManagerMessage(MovieManagerMessage::RefreshMovies)
+                        | AppMessage::MovieManagerMessage(MovieManagerMessage::SearchTitle(_))
+                        | AppMessage::MovieManagerMessage(MovieManagerMessage::CreateNfo(_))
+                        | AppMessage::MovieManagerMessage(MovieManagerMessage::SaveNfo(_))
+                        | AppMessage::MovieManagerMessage(MovieManagerMessage::RetrieveArtworks(_)) => {
                             panic!("Deprecated");
                         },
                         AppMessage::Close => {

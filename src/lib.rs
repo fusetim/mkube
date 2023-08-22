@@ -1,9 +1,6 @@
 use anyhow::{anyhow, bail, Result};
-use async_recursion::async_recursion;
-use async_stream::try_stream;
 use core::convert::AsRef;
 use futures_core::stream::Stream;
-use futures_util::stream::StreamExt;
 use remotefs::fs::Metadata;
 use std::future::Future;
 use std::path::PathBuf;
@@ -437,12 +434,15 @@ impl<'a> Stream for LibraryStream<'a> {
             if let Some(path) = ls.found_path.pop() {
                 Poll::Ready(Some(Ok(path)))
             } else {
-                for i in 0..ls.sub_streams.len() {
-                    let sub = ls.sub_streams.get_mut(i).unwrap();
+                let mut i = 0;
+                while let Some(sub) = ls.sub_streams.get_mut(i) {
                     match sub.as_mut().poll_next(cx) {
-                        Poll::Pending => {}
+                        Poll::Pending => {
+                            i += 1;
+                        }
                         Poll::Ready(Some(Ok(path))) => {
                             ls.found_path.push(path);
+                            i += 1;
                         }
                         Poll::Ready(None) => {
                             ls.sub_streams.swap_remove(i);
