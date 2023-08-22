@@ -44,7 +44,10 @@ async fn main() -> Result<()> {
 
     log::info!("Terminal successfully prepared!");
 
-    match run(&mut terminal).await {
+    match tokio::task::LocalSet::new()
+        .run_until(run(&mut terminal))
+        .await
+    {
         Ok(()) => {
             log::info!("Exit success.");
         }
@@ -169,7 +172,7 @@ where
         ..Default::default()
     };
     let mut event_reader = EventStream::new();
-    let mut pending_futures: JoinSet<Option<AppEvent>> = JoinSet::new();
+    let mut pending_futures: JoinSet<Vec<AppEvent>> = JoinSet::new();
     let tick = time::interval(Duration::from_millis(1000 / 15));
     tokio::pin!(tick);
 
@@ -264,7 +267,7 @@ where
                     use mkube::{ views::movie_manager::{MovieManagerEvent, MovieManagerMessage}};
                     match msg {
                         AppMessage::Closure(closure) => {
-                            if let Some(evt) = closure(&mut state) {
+                            for evt in closure(&mut state) {
                                 state.register_event(evt);
                             }
                         }
@@ -272,7 +275,7 @@ where
                             let _ = pending_futures.spawn(builder(&mut state));
                         },
                         AppMessage::AppFuture(builder) => {
-                            if let Some(evt) = builder(&mut state).await {
+                            for evt in builder(&mut state).await {
                                 state.register_event(evt);
                             }
                         },
@@ -351,82 +354,17 @@ where
                                 }
                             }
                         },
-                        AppMessage::MovieManagerMessage(MovieManagerMessage::SearchTitle(title)) => {
-                            use tmdb_api::movie::search::MovieSearch;
-                            use tmdb_api::prelude::Command;
-                            let ms = MovieSearch::new(title.clone())
-                                .with_language(Some(state.config.tmdb_preferences.prefered_lang.clone()))
-                                .with_region(Some(state.config.tmdb_preferences.prefered_country.clone()));
-                            match ms.execute(&tmdb_client).await {
-                                Ok(results) => { state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::SearchResults(results.results))); },
-                                Err(err) => { log::error!("Movie search failed for title `{}` due to:\n{:?}", title, err); },
-                            }
+                        AppMessage::MovieManagerMessage(MovieManagerMessage::SearchTitle(_)) => {
+                            panic!("Deprecated");
                         },
-                        AppMessage::MovieManagerMessage(MovieManagerMessage::CreateNfo((id, fs_id, mut path))) => {
-                            use std::io::Cursor;
-                            use std::io::Seek;
-                            let mut conns_lock = conns.lock().await;
-                            if conns_lock[fs_id].is_none() || state.libraries[fs_id].is_none() {
-                                log::error!("NFO creation failed because fs_id {} does not exist anymore.", fs_id);
-                                continue;
-                            }
-                            let mut movie_nfo = mkube::transform_as_nfo(&tmdb_client, id, Some(state.config.tmdb_preferences.prefered_lang.clone())).await?;
-                            let mt = mkube::get_metadata(conns_lock[fs_id].as_mut().unwrap(), (state.libraries[fs_id].as_ref().unwrap()).try_into().expect("Cannot get a baseURL from library."), path.clone()).await?;
-                            movie_nfo.fileinfo = Some(mt);
-                            let nfo_string = quick_xml::se::to_string(&movie_nfo).expect("Failed to produce a valid nfo file.");
-                            let movie_path= path.clone();
-
-                            path.set_extension("nfo");
-                            let mut buf = Cursor::new(Vec::new());
-                            buf.write_all(br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>"#).await?;
-                            buf.write_all(nfo_string.as_bytes()).await?;
-                            let _ = buf.rewind();
-                            let _ = conns_lock[fs_id].as_mut().unwrap().as_mut_rfs().create_file(&path, &Metadata::default(), Box::new(buf))
-                                .map_err(|err| anyhow!("Can't open the nfo file., causes:\n{:?}", err))?;
-                            state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::OpenTable));
-                            state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::MovieUpdated((movie_nfo, fs_id, movie_path))));
+                        AppMessage::MovieManagerMessage(MovieManagerMessage::CreateNfo(_)) => {
+                            panic!("Deprecated");
                         },
-                        AppMessage::MovieManagerMessage(MovieManagerMessage::SaveNfo((movie_nfo, fs_id, mut path))) => {
-                            let mut conns_lock = conns.lock().await;
-                            if conns_lock[fs_id].is_none() {
-                                log::error!("Failed to save NFO on fs (id: {}), as it does not exist anymore.", fs_id);
-                                continue;
-                            }
-                            use std::io::Cursor;
-                            use std::io::Seek;
-                            let nfo_string = quick_xml::se::to_string(&movie_nfo).expect("Failed to produce a valid nfo file.");
-                            let movie_path= path.clone();
-
-                            path.set_extension("nfo");
-                            let mut buf = Cursor::new(Vec::new());
-                            buf.write_all(br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>"#).await?;
-                            buf.write_all(nfo_string.as_bytes()).await?;
-                            let _ = buf.rewind();
-                            let _ = conns_lock[fs_id].as_mut().unwrap().as_mut_rfs().create_file(&path, &Metadata::default(), Box::new(buf))
-                                .map_err(|err| anyhow!("Can't open the nfo file., causes:\n{:?}", err))?;
-                            state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::OpenTable));
-                            state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::MovieUpdated((movie_nfo, fs_id, movie_path))));
+                        AppMessage::MovieManagerMessage(MovieManagerMessage::SaveNfo(_)) => {
+                            panic!("Deprecated");
                         },
-                        AppMessage::MovieManagerMessage(MovieManagerMessage::RetrieveArtworks((movie_nfo, fs_id, path))) => {
-                            let mut conns_lock = conns.lock().await;
-                            if conns_lock[fs_id].is_none() {
-                                log::error!("Failed to retrieve artworks on fs (id: {}), as it does not exist anymore.", fs_id);
-                                continue;
-                            }
-                            for th in movie_nfo.thumb {
-                                if let Some(mut aspect) = th.aspect.clone() {
-                                    if aspect == "landscape" { aspect = "fanart".into() }
-                                    let output = if let Some(name) = path.file_stem().map(std::ffi::OsStr::to_string_lossy) {
-                                        path.with_file_name(format!("{}-{}.jpg", name, &aspect))
-                                    } else {
-                                        path.with_file_name(&aspect)
-                                    };
-                                    match mkube::download_file(conns_lock[fs_id].as_mut().unwrap(), &http_client, output, &*format!("https://image.tmdb.org/t/p/original{}", &th.path)).await {
-                                        Ok(()) => {},
-                                        Err(err) => { log::error!("Failed to download {} ({}) for {}. Cause:\n{:?}", &aspect, &th.path, &movie_nfo.title, err); },
-                                    }
-                                }
-                            }
+                        AppMessage::MovieManagerMessage(MovieManagerMessage::RetrieveArtworks(_)) => {
+                            panic!("Deprecated");
                         },
                         AppMessage::Close => {
                             break;
@@ -439,8 +377,8 @@ where
             },
             task = pending_futures.join_next(), if !pending_futures.is_empty() => match task {
                 Some(task) => match task {
-                    Ok(evt) => if let Some(evt) = evt {
-                        state.register_event(evt);
+                    Ok(evt) => for e in evt {
+                        state.register_event(e);
                     },
                     Err(err) => {
                         log::error!("pending_futures has returned an error:\n{:?}", err);

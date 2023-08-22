@@ -1,4 +1,9 @@
+use anyhow::anyhow;
+use remotefs::fs::Metadata;
+use std::io::{Cursor, Seek};
 use std::path::PathBuf;
+use tmdb_api::client::Client as TmdbClient;
+use tokio::io::AsyncWriteExt;
 use tui::{buffer::Buffer, layout::Rect, widgets::StatefulWidget};
 
 pub mod details;
@@ -7,7 +12,7 @@ pub mod search;
 pub mod table;
 
 use crate::views::widgets::InputState;
-use crate::AppEvent;
+use crate::{nfo, AppEvent, AppMessage, AppState, ConnectionPool};
 use editor::{MovieEditor, MovieEditorState};
 use search::{MovieSearch, MovieSearchState};
 use table::{MovieTable, MovieTableState};
@@ -131,6 +136,215 @@ impl MovieManagerState {
                 }
             }
             _ => false,
+        }
+    }
+}
+
+impl From<MovieManagerMessage> for AppMessage {
+    fn from(value: MovieManagerMessage) -> AppMessage {
+        match value {
+            MovieManagerMessage::RefreshMovies => {
+                AppMessage::MovieManagerMessage(value)
+            }
+            MovieManagerMessage::SearchTitle(title) => AppMessage::HttpFuture(Box::new(
+                |app_state: &mut AppState, _: &reqwest::Client, tmdb_client: &TmdbClient| {
+                    use tmdb_api::movie::search::MovieSearch;
+                    use tmdb_api::prelude::Command;
+                    let ms = MovieSearch::new(title.clone())
+                        .with_language(Some(
+                            app_state.config.tmdb_preferences.prefered_lang.clone(),
+                        ))
+                        .with_region(Some(
+                            app_state.config.tmdb_preferences.prefered_country.clone(),
+                        ));
+                    Box::pin(async move {
+                        match ms.execute(&tmdb_client).await {
+                            Ok(results) => {
+                                vec![AppEvent::MovieManagerEvent(
+                                    MovieManagerEvent::SearchResults(results.results),
+                                )]
+                            }
+                            Err(err) => {
+                                log::error!(
+                                    "Movie search failed for title `{}` due to:\n{:?}",
+                                    title,
+                                    err
+                                );
+                                vec![]
+                            }
+                        }
+                    })
+                },
+            )),
+            MovieManagerMessage::CreateNfo((tmdb_id, fs_id, path)) => {
+                AppMessage::HttpFuture(Box::new(
+                    move |app_state: &mut AppState,
+                          _: &reqwest::Client,
+                          tmdb_client: &TmdbClient| {
+                        let prefered_lang = app_state.config.tmdb_preferences.prefered_lang.clone();
+                        let lib_url: Result<url::Url, ()> =
+                            app_state.libraries[fs_id].as_ref().unwrap().try_into();
+                        Box::pin(async move {
+                            if let Ok(lib_url) = lib_url {
+                                match crate::transform_as_nfo(
+                                    &tmdb_client,
+                                    tmdb_id,
+                                    Some(prefered_lang),
+                                )
+                                .await
+                                {
+                                    Ok(mut movie_nfo) => {
+                                        let lib_url = lib_url.clone();
+                                        drop(tmdb_client);
+                                        vec![AppEvent::ContinuationIOFuture(Box::new(
+                                            move |_, _, _, conns: &ConnectionPool| {
+                                                Box::pin(async move {
+                                                    match async move {
+                                                    let mut conns_lock = conns.lock().await;
+                                                    if conns_lock[fs_id].is_none() {
+                                                        return Err(anyhow!("NFO creation failed because fs_id {} does not exist anymore.", fs_id));
+                                                    }
+                                                    let mt = crate::get_metadata(conns_lock[fs_id].as_mut().unwrap(), lib_url, path.clone()).await?;
+                                                    movie_nfo.fileinfo = Some(mt);
+                                                    let nfo_string = quick_xml::se::to_string(&movie_nfo).map_err(|err| anyhow!("Failed to produce a valid NFO/XML, err:\n{:?}", err))?;
+                                                    let mut helper_path = path.clone();
+                                                    helper_path.set_extension("nfo");
+                                                    let mut buf = Cursor::new(Vec::new());
+                                                    buf.write_all(br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>"#).await?;
+                                                    buf.write_all(nfo_string.as_bytes()).await?;
+                                                    let _ = buf.rewind();
+                                                    let _ = conns_lock[fs_id].as_mut().unwrap().as_mut_rfs().create_file(&helper_path, &Metadata::default(), Box::new(buf))
+                                                        .map_err(|err| anyhow!("Can't open the nfo file., causes:\n{:?}", err))?;
+                                                    Ok(vec![
+                                                        AppEvent::MovieManagerEvent(MovieManagerEvent::OpenTable),
+                                                        AppEvent::MovieManagerEvent(MovieManagerEvent::MovieUpdated((movie_nfo, fs_id, path)))
+                                                    ])
+                                                }.await {
+                                                    Ok(ret) => ret,
+                                                    Err(err) => {
+                                                        log::error!("NFO Creation failed due to the following error:\n{:?}", err);
+                                                        vec![]
+                                                    },
+                                                }
+                                                })
+                                            },
+                                        ))]
+                                    }
+                                    Err(err) => {
+                                        log::error!("Error occured during nfo creation (transform_as_nfo):\n{:?}", err);
+                                        vec![]
+                                    }
+                                }
+                            } else {
+                                log::error!("Unable to create nfo as the current library ({}) creates an unexpected URL.", fs_id);
+                                vec![]
+                            }
+                        })
+                    },
+                ))
+            }
+            MovieManagerMessage::RetrieveArtworks((nfo, fs_id, path)) => {
+                AppMessage::IOFuture(Box::new(
+                    move |_, client: &reqwest::Client, _, conns: &ConnectionPool| {
+                        Box::pin(async move {
+                            let mut conns_lock = conns.lock().await;
+                            if conns_lock[fs_id].is_none() {
+                                log::error!("Failed to retrieve artworks on fs (id: {}), as it does not exist anymore.", fs_id);
+                                return vec![];
+                            }
+                            for th in nfo.thumb {
+                                if let Some(mut aspect) = th.aspect.clone() {
+                                    if aspect == "landscape" {
+                                        aspect = "fanart".into()
+                                    }
+                                    let output = if let Some(name) =
+                                        path.file_stem().map(std::ffi::OsStr::to_string_lossy)
+                                    {
+                                        path.with_file_name(format!("{}-{}.jpg", name, &aspect))
+                                    } else {
+                                        path.with_file_name(&aspect)
+                                    };
+                                    match crate::download_file(
+                                        conns_lock[fs_id].as_mut().unwrap(),
+                                        &client,
+                                        output,
+                                        &*format!(
+                                            "https://image.tmdb.org/t/p/original{}",
+                                            &th.path
+                                        ),
+                                    )
+                                    .await
+                                    {
+                                        Ok(()) => {}
+                                        Err(err) => {
+                                            log::error!(
+                                                "Failed to download {} ({}) for {}. Cause:\n{:?}",
+                                                &aspect,
+                                                &th.path,
+                                                &nfo.title,
+                                                err
+                                            );
+                                        }
+                                    }
+                                }
+                            }
+                            return vec![];
+                        })
+                    },
+                ))
+            }
+            MovieManagerMessage::SaveNfo((nfo, fs_id, path)) => {
+                AppMessage::IOFuture(Box::new(move |_, _, _, conns: &ConnectionPool| {
+                    Box::pin(async move {
+                        match async move {
+                            let mut conns_lock = conns.lock().await;
+                            if conns_lock[fs_id].is_none() {
+                                return Err(anyhow!(
+                                    "NFO save failed because fs_id {} does not exist anymore.",
+                                    fs_id
+                                ));
+                            }
+                            let nfo_string = quick_xml::se::to_string(&nfo).map_err(|err| {
+                                anyhow!("Failed to produce a valid NFO/XML, err:\n{:?}", err)
+                            })?;
+                            let mut helper_path = path.clone();
+                            helper_path.set_extension("nfo");
+                            let mut buf = Cursor::new(Vec::new());
+                            buf.write_all(
+                                br#"<?xml version="1.0" encoding="UTF-8" standalone="yes"?>"#,
+                            )
+                            .await?;
+                            buf.write_all(nfo_string.as_bytes()).await?;
+                            let _ = buf.rewind();
+                            let _ = conns_lock[fs_id]
+                                .as_mut()
+                                .unwrap()
+                                .as_mut_rfs()
+                                .create_file(&helper_path, &Metadata::default(), Box::new(buf))
+                                .map_err(|err| {
+                                    anyhow!("Can't open the nfo file., causes:\n{:?}", err)
+                                })?;
+                            Ok(vec![
+                                AppEvent::MovieManagerEvent(MovieManagerEvent::OpenTable),
+                                AppEvent::MovieManagerEvent(MovieManagerEvent::MovieUpdated((
+                                    nfo, fs_id, path,
+                                ))),
+                            ])
+                        }
+                        .await
+                        {
+                            Ok(ret) => ret,
+                            Err(err) => {
+                                log::error!(
+                                    "NFO save failed due to the following error:\n{:?}",
+                                    err
+                                );
+                                vec![]
+                            }
+                        }
+                    })
+                }))
+            }
         }
     }
 }

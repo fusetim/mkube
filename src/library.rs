@@ -52,9 +52,22 @@ pub struct Library {
 impl std::fmt::Display for Library {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         if let Some(user) = self.username.as_deref() {
-            write!(f, "{}://{}@{}{}", self.fs_type.to_scheme(), user, self.host.as_deref().unwrap_or(""), self.path.display())
+            write!(
+                f,
+                "{}://{}@{}{}",
+                self.fs_type.to_scheme(),
+                user,
+                self.host.as_deref().unwrap_or(""),
+                self.path.display()
+            )
         } else {
-            write!(f, "{}://{}{}", self.fs_type.to_scheme(), self.host.as_deref().unwrap_or(""), self.path.display())
+            write!(
+                f,
+                "{}://{}{}",
+                self.fs_type.to_scheme(),
+                self.host.as_deref().unwrap_or(""),
+                self.path.display()
+            )
         }
     }
 }

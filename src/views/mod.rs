@@ -20,10 +20,10 @@ use movie_manager::{MovieManager, MovieManagerEvent, MovieManagerMessage, MovieM
 use settings::{SettingsMessage, SettingsPage, SettingsState};
 
 pub enum AppMessage {
-    Closure(Box<dyn FnOnce(&mut AppState) -> Option<AppEvent> + Send + Sync>),
+    Closure(Box<dyn FnOnce(&mut AppState) -> Vec<AppEvent> + Send + Sync>),
     Future(
         Box<
-            dyn FnOnce(&mut AppState) -> Pin<Box<dyn Future<Output = Option<AppEvent>> + Send>>
+            dyn FnOnce(&mut AppState) -> Pin<Box<dyn Future<Output = Vec<AppEvent>> + Send>>
                 + Send
                 + Sync,
         >,
@@ -33,7 +33,7 @@ pub enum AppMessage {
             dyn for<'a> FnOnce(
                     &'a mut AppState,
                 )
-                    -> Pin<Box<dyn Future<Output = Option<AppEvent>> + Send + 'a>>
+                    -> Pin<Box<dyn Future<Output = Vec<AppEvent>> + Send + 'a>>
                 + Send
                 + Sync,
         >,
@@ -45,7 +45,7 @@ pub enum AppMessage {
                     &'a reqwest::Client,
                     &'a tmdb_api::client::Client,
                 )
-                    -> Pin<Box<dyn Future<Output = Option<AppEvent>> + Send + 'a>>
+                    -> Pin<Box<dyn Future<Output = Vec<AppEvent>> + Send + 'a>>
                 + Send
                 + Sync,
         >,
@@ -58,7 +58,7 @@ pub enum AppMessage {
                     &'a tmdb_api::client::Client,
                     &'a ConnectionPool,
                 )
-                    -> Pin<Box<dyn Future<Output = Option<AppEvent>> + 'a>>
+                    -> Pin<Box<dyn Future<Output = Vec<AppEvent>> + 'a>>
                 + Send
                 + Sync,
         >,
@@ -90,7 +90,7 @@ impl std::fmt::Debug for AppMessage {
 pub enum AppEvent {
     ContinuationFuture(
         Box<
-            dyn FnOnce(&mut AppState) -> Pin<Box<dyn Future<Output = Option<AppEvent>> + Send>>
+            dyn FnOnce(&mut AppState) -> Pin<Box<dyn Future<Output = Vec<AppEvent>> + Send>>
                 + Send
                 + Sync,
         >,
@@ -100,7 +100,7 @@ pub enum AppEvent {
             dyn for<'a> FnOnce(
                     &'a mut AppState,
                 )
-                    -> Pin<Box<dyn Future<Output = Option<AppEvent>> + Send + 'a>>
+                    -> Pin<Box<dyn Future<Output = Vec<AppEvent>> + Send + 'a>>
                 + Send
                 + Sync,
         >,
@@ -112,7 +112,7 @@ pub enum AppEvent {
                     &'a reqwest::Client,
                     &'a tmdb_api::client::Client,
                 )
-                    -> Pin<Box<dyn Future<Output = Option<AppEvent>> + Send + 'a>>
+                    -> Pin<Box<dyn Future<Output = Vec<AppEvent>> + Send + 'a>>
                 + Send
                 + Sync,
         >,
@@ -125,7 +125,7 @@ pub enum AppEvent {
                     &'a tmdb_api::client::Client,
                     &'a tokio::sync::Mutex<Vec<Option<crate::multifs::MultiFs>>>,
                 )
-                    -> Pin<Box<dyn Future<Output = Option<AppEvent>> + 'a>>
+                    -> Pin<Box<dyn Future<Output = Vec<AppEvent>> + 'a>>
                 + Send
                 + Sync,
         >,
@@ -194,9 +194,9 @@ impl AppState {
                             |appstate: &mut AppState| {
                                 let libs = appstate.libraries.iter().flatten().cloned().collect();
                                 Box::pin(async move {
-                                    Some(AppEvent::SettingsEvent(
+                                    vec![AppEvent::SettingsEvent(
                                         settings::SettingsEvent::OpenMenu(libs),
-                                    ))
+                                    )]
                                 })
                             },
                         )))

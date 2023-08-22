@@ -175,9 +175,7 @@ impl MovieTableState {
                     self.is_loading = true;
                     let sender = MESSAGE_SENDER.get().unwrap();
                     sender
-                        .send(AppMessage::MovieManagerMessage(
-                            MovieManagerMessage::RefreshMovies,
-                        ))
+                        .send(MovieManagerMessage::RefreshMovies.into())
                         .unwrap();
                     true
                 } else if kev.code == KeyCode::Up && self.movies.len() > 0 {
@@ -211,41 +209,31 @@ impl MovieTableState {
                         KeyCode::Char('t') => {
                             let (mut movie, fs_id, path) = self.movies[s].clone();
                             movie.source = Some("TV".into());
-                            AppMessage::MovieManagerMessage(MovieManagerMessage::SaveNfo((
-                                movie, fs_id, path,
-                            )))
+                            MovieManagerMessage::SaveNfo((movie, fs_id, path)).into()
                         }
                         KeyCode::Char('b') => {
                             let (mut movie, fs_id, path) = self.movies[s].clone();
                             movie.source = Some("Bluray".into());
-                            AppMessage::MovieManagerMessage(MovieManagerMessage::SaveNfo((
-                                movie, fs_id, path,
-                            )))
+                            MovieManagerMessage::SaveNfo((movie, fs_id, path)).into()
                         }
                         KeyCode::Char('d') => {
                             let (mut movie, fs_id, path) = self.movies[s].clone();
                             movie.source = Some("DVD".into());
-                            AppMessage::MovieManagerMessage(MovieManagerMessage::SaveNfo((
-                                movie, fs_id, path,
-                            )))
+                            MovieManagerMessage::SaveNfo((movie, fs_id, path)).into()
                         }
                         KeyCode::Char('w') => {
                             let (mut movie, fs_id, path) = self.movies[s].clone();
                             movie.source = Some("WEB".into());
-                            AppMessage::MovieManagerMessage(MovieManagerMessage::SaveNfo((
-                                movie, fs_id, path,
-                            )))
+                            MovieManagerMessage::SaveNfo((movie, fs_id, path)).into()
                         }
                         KeyCode::Char('u') => {
                             let (mut movie, fs_id, path) = self.movies[s].clone();
                             movie.source = Some("UHD Bluray".into());
-                            AppMessage::MovieManagerMessage(MovieManagerMessage::SaveNfo((
-                                movie, fs_id, path,
-                            )))
+                            MovieManagerMessage::SaveNfo((movie, fs_id, path)).into()
                         }
-                        KeyCode::Char('a') => AppMessage::MovieManagerMessage(
-                            MovieManagerMessage::RetrieveArtworks(self.movies[s].clone()),
-                        ),
+                        KeyCode::Char('a') => {
+                            MovieManagerMessage::RetrieveArtworks(self.movies[s].clone()).into()
+                        }
                         _ => return false,
                     };
                     sender.send(msg).unwrap();

@@ -156,9 +156,9 @@ impl From<SettingsMessage> for AppMessage {
         match value {
             SettingsMessage::OpenMenu => {
                 AppMessage::Closure(Box::new(|app_state: &mut AppState| {
-                    Some(AppEvent::SettingsEvent(SettingsEvent::OpenMenu(
+                    vec![AppEvent::SettingsEvent(SettingsEvent::OpenMenu(
                         app_state.libraries.iter().flatten().cloned().collect(),
-                    )))
+                    ))]
                 }))
             }
             SettingsMessage::EditExisting(_) | SettingsMessage::SaveLibrary(_) => {
@@ -188,7 +188,7 @@ impl From<SettingsMessage> for AppMessage {
                             (false, false)
                         }
                     };
-                    Some(AppEvent::SettingsEvent(SettingsEvent::ConnTestResult(rst)))
+                    vec![AppEvent::SettingsEvent(SettingsEvent::ConnTestResult(rst))]
                 })
             })),
         }
@@ -601,7 +601,7 @@ impl SettingsEditState {
                             |appstate: &mut AppState| {
                                 let libs = appstate.libraries.iter().flatten().cloned().collect();
                                 Box::pin(async move {
-                                    Some(AppEvent::SettingsEvent(SettingsEvent::OpenMenu(libs)))
+                                    vec![AppEvent::SettingsEvent(SettingsEvent::OpenMenu(libs))]
                                 })
                             },
                         )))

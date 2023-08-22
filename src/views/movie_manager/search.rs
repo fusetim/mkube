@@ -155,11 +155,12 @@ impl MovieSearchState {
                     if self.selected == 0 || self.selected == 1 {
                         let sender = MESSAGE_SENDER.get().unwrap();
                         sender
-                            .send(AppMessage::MovieManagerMessage(
+                            .send(
                                 MovieManagerMessage::SearchTitle(
                                     self.query_state.get_value().to_owned(),
-                                ),
-                            ))
+                                )
+                                .into(),
+                            )
                             .unwrap();
                         self.is_loading = true;
                         true
@@ -167,13 +168,14 @@ impl MovieSearchState {
                         if let Some(index) = self.table_state.selected() {
                             let sender = MESSAGE_SENDER.get().unwrap();
                             sender
-                                .send(AppMessage::MovieManagerMessage(
+                                .send(
                                     MovieManagerMessage::CreateNfo((
                                         self.results[index].inner.id,
                                         self.movie_fs_id,
                                         self.movie_path.clone(),
-                                    )),
-                                ))
+                                    ))
+                                    .into(),
+                                )
                                 .unwrap();
                             return true;
                         }

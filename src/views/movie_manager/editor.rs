@@ -188,13 +188,14 @@ impl MovieEditorState {
                         let sender = MESSAGE_SENDER.get().unwrap();
                         if selected == 4 {
                             sender
-                                .send(AppMessage::MovieManagerMessage(
+                                .send(
                                     MovieManagerMessage::SaveNfo((
                                         self.get_nfo(),
                                         self.movie_fs_id,
                                         self.movie_path.clone(),
-                                    )),
-                                ))
+                                    ))
+                                    .into(),
+                                )
                                 .unwrap();
                         } else if selected == 5 {
                             sender
