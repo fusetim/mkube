@@ -1,9 +1,15 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, bail, Result};
 use async_recursion::async_recursion;
+use async_stream::try_stream;
 use core::convert::AsRef;
+use futures_core::stream::Stream;
+use futures_util::stream::StreamExt;
 use remotefs::fs::Metadata;
+use std::future::Future;
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::sync::OnceLock;
+use std::task::{Context, Poll};
 use std::{io::Cursor, io::Seek};
 use tmdb_api::client::Client as TmdbClient;
 use tmdb_api::{
@@ -69,58 +75,6 @@ where
 
     log::info!("Sucessfully downloaded file {}.", output.display());
     Ok(())
-}
-
-#[async_recursion(?Send)]
-pub async fn analyze_library(
-    lfs: &mut MultiFs,
-    path: PathBuf,
-    depth: usize,
-) -> Result<Vec<PathBuf>> {
-    let dir = lfs.as_mut_rfs().list_dir(&path).map_err(|err| {
-        anyhow!(
-            "Failed to open directory {}, causes:\n{:?}",
-            &path.display(),
-            err
-        )
-    })?;
-    let mut video_paths = Vec::new();
-    for entry in dir {
-        if entry.metadata().file_type.is_file() {
-            if entry.path().extension().is_some()
-                && VIDEO_EXTENSIONS
-                    .contains(&entry.path().extension().unwrap().to_string_lossy().as_ref())
-            {
-                log::debug!("Found {}!", entry.path().display());
-                video_paths.push(entry.path().to_owned());
-            } else {
-                log::debug!(
-                    "Ignored {} (not a video container)!",
-                    entry.path().display()
-                );
-            }
-        } else if entry.is_dir() {
-            if entry.path().ends_with(".") || entry.path().ends_with("..") {
-                continue;
-            }
-            let no_media = entry.path().join("./.nomedia");
-            if lfs.as_mut_rfs().exists(&no_media).map_err(|err| {
-                anyhow!(
-                    "Failed to open directory {}, causes:\n{:?}",
-                    &no_media.display(),
-                    err
-                )
-            })? {
-                log::info!("Ignoring entry {} (.nomedia).", entry.path().display());
-            } else if depth > 0 {
-                let sub = analyze_library(lfs, entry.path().to_owned(), depth - 1).await?;
-                video_paths.extend(sub);
-            }
-        } else {
-            log::debug!("Ignoring entry {} (symlink).", entry.path().display());
-        }
-    }
-    Ok(video_paths)
 }
 
 pub async fn try_open_nfo(lfs: &mut MultiFs, mut path: PathBuf) -> Result<nfo::Movie> {
@@ -347,4 +301,181 @@ pub async fn transform_as_nfo(
     };
 
     Ok(movie)
+}
+
+pub fn analyze_library<'a>(
+    conn: (&'a ConnectionPool, usize),
+    path: PathBuf,
+    depth: usize,
+) -> LibraryStream<'a> {
+    LibraryStream::new(conn, path, depth)
+}
+
+pub struct LibraryStream<'a> {
+    conn: (&'a ConnectionPool, usize),
+    depth: usize,
+    sub_streams: Vec<Pin<Box<LibraryStream<'a>>>>,
+    found_path: Vec<PathBuf>,
+    search_future: Option<Pin<Box<dyn Future<Output = Result<Vec<(PathBuf, bool)>>> + 'a>>>,
+}
+
+impl<'a> LibraryStream<'a> {
+    pub fn new(
+        conn: (&'a ConnectionPool, usize),
+        path: PathBuf,
+        depth: usize,
+    ) -> LibraryStream<'a> {
+        LibraryStream {
+            conn,
+            depth,
+            search_future: Some(Box::pin(LibraryStream::search(conn.clone(), path, depth))),
+            sub_streams: Vec::new(),
+            found_path: Vec::new(),
+        }
+    }
+
+    async fn search(
+        conn: (&'a ConnectionPool, usize),
+        path: PathBuf,
+        depth: usize,
+    ) -> Result<Vec<(PathBuf, bool)>> {
+        let dir;
+        {
+            let mut conn_lock = conn.0.lock().await;
+            let lfs = (match conn_lock.get_mut(conn.1) {
+                Some(c) => match c {
+                    Some(ref mut lfs) => Ok::<&mut MultiFs, anyhow::Error>(lfs),
+                    None => bail!(
+                        "Searching a path on an unexistant library {} (editted or deleted).",
+                        conn.1
+                    ),
+                },
+                None => bail!(
+                    "Searching a path on an unexistant library {} (never existed).",
+                    conn.1
+                ),
+            })?;
+            let no_media = path.join("./.nomedia");
+            if lfs.as_mut_rfs().exists(&no_media).map_err(|err| {
+                anyhow!(
+                    "Failed to open directory {}, causes:\n{:?}",
+                    &no_media.display(),
+                    err
+                )
+            })? {
+                log::info!("Ignoring entry {} (.nomedia).", path.display());
+                return Ok(vec![]);
+            }
+            dir = lfs.as_mut_rfs().list_dir(&path).map_err(|err| {
+                anyhow!(
+                    "Failed to open directory {}, causes:\n{:?}",
+                    &path.display(),
+                    err
+                )
+            })?;
+        }
+        let mut video_paths = Vec::new();
+        for entry in dir {
+            if entry.metadata().file_type.is_file() {
+                if entry.path().extension().is_some()
+                    && VIDEO_EXTENSIONS
+                        .contains(&entry.path().extension().unwrap().to_string_lossy().as_ref())
+                {
+                    log::debug!("Found {}!", entry.path().display());
+                    video_paths.push((entry.path().to_owned(), false));
+                } else {
+                    log::debug!(
+                        "Ignored {} (not a video container)!",
+                        entry.path().display()
+                    );
+                }
+            } else if entry.is_dir() {
+                if entry.path().ends_with(".") || entry.path().ends_with("..") {
+                    continue;
+                }
+                if depth > 0 {
+                    video_paths.push((entry.path().to_owned(), true));
+                }
+            } else {
+                log::debug!("Ignoring entry {} (symlink).", entry.path().display());
+            }
+        }
+        Ok(video_paths)
+    }
+}
+
+impl<'a> Stream for LibraryStream<'a> {
+    type Item = Result<PathBuf>;
+
+    fn poll_next(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
+        let ls = self.as_mut().get_mut();
+        if let Some(fut) = ls.search_future.as_mut() {
+            match fut.as_mut().poll(cx) {
+                Poll::Pending => Poll::Pending,
+                Poll::Ready(rst) => match rst {
+                    Ok(paths) => {
+                        for (path, is_dir) in paths {
+                            if !is_dir {
+                                ls.found_path.push(path);
+                            } else {
+                                let depth = ls.depth;
+                                let conn = ls.conn;
+                                ls.sub_streams.push(Box::pin(LibraryStream::new(
+                                    conn,
+                                    path,
+                                    depth - 1,
+                                )));
+                            }
+                        }
+                        ls.search_future = None;
+                        self.poll_next(cx)
+                    }
+                    Err(err) => Poll::Ready(Some(Err(err))),
+                },
+            }
+        } else {
+            if let Some(path) = ls.found_path.pop() {
+                Poll::Ready(Some(Ok(path)))
+            } else {
+                for i in 0..ls.sub_streams.len() {
+                    let sub = ls.sub_streams.get_mut(i).unwrap();
+                    match sub.as_mut().poll_next(cx) {
+                        Poll::Pending => {}
+                        Poll::Ready(Some(Ok(path))) => {
+                            ls.found_path.push(path);
+                        }
+                        Poll::Ready(None) => {
+                            ls.sub_streams.swap_remove(i);
+                        }
+                        Poll::Ready(Some(Err(err))) => {
+                            return Poll::Ready(Some(Err(err)));
+                        }
+                    }
+                }
+                if let Some(path) = ls.found_path.pop() {
+                    Poll::Ready(Some(Ok(path)))
+                } else {
+                    Poll::Ready(None)
+                }
+            }
+        }
+    }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        if self.search_future.is_none() {
+            if self.depth == 0 {
+                (self.found_path.len(), Some(self.found_path.len()))
+            } else {
+                let upper = self
+                    .sub_streams
+                    .iter()
+                    .map(|sub| sub.size_hint().1)
+                    .chain(std::iter::once(Some(self.found_path.len())))
+                    .sum();
+                (self.found_path.len(), upper)
+            }
+        } else {
+            (0, None)
+        }
+    }
 }

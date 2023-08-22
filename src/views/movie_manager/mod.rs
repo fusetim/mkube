@@ -1,4 +1,6 @@
-use anyhow::anyhow;
+use anyhow::{anyhow, Result};
+use futures_core::stream::Stream;
+use futures_util::stream::{select_all, StreamExt};
 use remotefs::fs::Metadata;
 use std::io::{Cursor, Seek};
 use std::path::PathBuf;
@@ -140,12 +142,72 @@ impl MovieManagerState {
     }
 }
 
+async fn unroll_movies<T: 'static + Unpin + Sync + Send + Stream<Item = Vec<Result<AppEvent>>>>(
+    mut stream: T,
+) -> Vec<AppEvent> {
+    if let Some(rst) = stream.next().await {
+        let mut events: Vec<AppEvent> = rst
+            .into_iter()
+            .filter_map(|evt| match evt {
+                Ok(e) => Some(e),
+                Err(err) => {
+                    log::error!("Error occured while refreshing movie:\n{:?}", err);
+                    None
+                }
+            })
+            .collect();
+        events.push(AppEvent::ContinuationIOFuture(Box::new(|_, _, _, _| {
+            Box::pin(unroll_movies(stream))
+        })));
+        events
+    } else {
+        vec![]
+    }
+}
+
 impl From<MovieManagerMessage> for AppMessage {
     fn from(value: MovieManagerMessage) -> AppMessage {
         match value {
-            MovieManagerMessage::RefreshMovies => {
-                AppMessage::MovieManagerMessage(value)
-            }
+            MovieManagerMessage::RefreshMovies => AppMessage::IOFuture(Box::new(
+                |app_state: &mut AppState, _, _, conns: &ConnectionPool| {
+                    let streams = app_state
+                        .libraries
+                        .iter()
+                        .enumerate()
+                        .filter(|(i, lib)| lib.is_some())
+                        .map(|(i, lib)| (i, lib.map(|l| l.path.clone()).unwrap()))
+                        .map(|(i, path)| (i, crate::analyze_library((conns, i), path, 4)))
+                        .map(|(i, stream)| {
+                            stream.map(|path| match path {
+                                Ok(path) => {
+                                    let placeholder_title = format!(
+                                        "{}",
+                                        path.file_name()
+                                            .map(|s| s.to_string_lossy().replace(&['.', '_'], " "))
+                                            .unwrap_or("Invalid file name.".into())
+                                    );
+                                    let movie = crate::nfo::Movie {
+                                        title: placeholder_title,
+                                        ..Default::default()
+                                    };
+                                    Ok(AppEvent::MovieManagerEvent(
+                                        MovieManagerEvent::MovieDiscovered((movie, i, path)),
+                                    ))
+                                }
+                                Err(err) => Err(err),
+                            })
+                        });
+                    let stream = select_all(streams).ready_chunks(20);
+                    Box::pin(async {
+                        vec![
+                            AppEvent::MovieManagerEvent(MovieManagerEvent::ClearMovieList),
+                            AppEvent::ContinuationIOFuture(Box::new(|_, _, _, _| {
+                                Box::pin(unroll_movies(stream))
+                            })),
+                        ]
+                    })
+                },
+            )),
             MovieManagerMessage::SearchTitle(title) => AppMessage::HttpFuture(Box::new(
                 |app_state: &mut AppState, _: &reqwest::Client, tmdb_client: &TmdbClient| {
                     use tmdb_api::movie::search::MovieSearch;

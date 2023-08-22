@@ -31,6 +31,8 @@ structured-logger = "1"
 confy = "0.5.1"
 oo7 = { version = "0.2.1", features = ["tokio", "native_crypto"], default_features = false, optional = true }
 rand = { version = "0.8.5", optional = true }
+async-stream = "0.3.5"
+futures-core = "0.3.28"
 
 [features]
 default = ["ftp", "secrets"]

@@ -326,33 +326,34 @@ where
                             panic!("Deprecated!");
                         },
                         AppMessage::MovieManagerMessage(MovieManagerMessage::RefreshMovies) => {
-                            state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::ClearMovieList));
-                            let mut conns_lock = conns.lock().await;
-                            for i in 0..conns_lock.len() {
-                                if conns_lock[i].is_none() || state.libraries[i].is_none(){
-                                    continue;
-                                }
-                                let _ = conns_lock[i].as_mut().unwrap().as_mut_rfs().connect();
-                                if conns_lock[i].as_mut().unwrap().as_mut_rfs().is_connected() {
-                                    match mkube::analyze_library(conns_lock[i].as_mut().unwrap(), state.libraries[i].as_ref().unwrap().path.clone(), 2).await {
-                                        Ok(paths) => {
-                                            for path in paths {
-                                                let placeholder_title = format!("{}", path.file_name().map(|s| s.to_string_lossy().replace(&['.', '_'], " ")).unwrap_or("Invalid file name.".into()));
-                                                let movie = mkube::try_open_nfo(conns_lock[i].as_mut().unwrap(), path.clone()).await.unwrap_or_else(|_| {
-                                                    mkube::nfo::Movie {
-                                                        title: placeholder_title,
-                                                        ..Default::default()
-                                                    }
-                                                });
-                                                state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::MovieDiscovered((movie, i, path))));
-                                            }
-                                        },
-                                        Err(err) => {
-                                            log::error!("Failed to analyze library `{}` due to:\n{:?}", state.libraries[i].as_ref().unwrap(), err);
-                                        }
-                                    }
-                                }
-                            }
+                            //state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::ClearMovieList));
+                            //let mut conns_lock = conns.lock().await;
+                            //for i in 0..conns_lock.len() {
+                            //    if conns_lock[i].is_none() || state.libraries[i].is_none(){
+                            //        continue;
+                            //    }
+                            //    let _ = conns_lock[i].as_mut().unwrap().as_mut_rfs().connect();
+                            //    if conns_lock[i].as_mut().unwrap().as_mut_rfs().is_connected() {
+                            //        match mkube::analyze_library(conns_lock[i].as_mut().unwrap(), state.libraries[i].as_ref().unwrap().path.clone(), 2).await {
+                            //            Ok(paths) => {
+                            //                for path in paths {
+                            //                    let placeholder_title = format!("{}", path.file_name().map(|s| s.to_string_lossy().replace(&['.', '_'], " ")).unwrap_or("Invalid file name.".into()));
+                            //                    let movie = mkube::try_open_nfo(conns_lock[i].as_mut().unwrap(), path.clone()).await.unwrap_or_else(|_| {
+                            //                        mkube::nfo::Movie {
+                            //                            title: placeholder_title,
+                            //                            ..Default::default()
+                            //                        }
+                            //                    });
+                            //                    state.register_event(AppEvent::MovieManagerEvent(MovieManagerEvent::MovieDiscovered((movie, i, path))));
+                            //                }
+                            //            },
+                            //            Err(err) => {
+                            //                log::error!("Failed to analyze library `{}` due to:\n{:?}", state.libraries[i].as_ref().unwrap(), err);
+                            //            }
+                            //        }
+                            //    }
+                            //}
+                            todo!()
                         },
                         AppMessage::MovieManagerMessage(MovieManagerMessage::SearchTitle(_)) => {
                             panic!("Deprecated");
