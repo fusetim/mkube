@@ -234,6 +234,9 @@ impl MovieTableState {
                         KeyCode::Char('a') => {
                             MovieManagerMessage::RetrieveArtworks(self.movies[s].clone()).into()
                         }
+                        KeyCode::Char('n') => {
+                            MovieManagerMessage::Rename(self.movies[s].clone()).into()
+                        }
                         _ => return false,
                     };
                     sender.send(msg).unwrap();
@@ -272,6 +275,20 @@ impl MovieTableState {
                     self.movies.push((movie, fs_id, path));
                 }
                 true
+            }
+            AppEvent::MovieManagerEvent(MovieManagerEvent::MovieMoved((fs_id, path, new_path))) => {
+                if let Some((ind, _)) = self
+                    .movies
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, (_, fi, p))| p == &path && fi == &fs_id)
+                    .next()
+                {
+                    self.movies[ind].2 = new_path;
+                    true
+                } else {
+                    false
+                }
             }
             _ => false,
         }

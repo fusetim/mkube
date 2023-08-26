@@ -14,6 +14,7 @@ use oo7::Keyring;
 pub struct Configuration {
     pub libraries: Vec<Option<ConfigLibrary>>,
     pub tmdb_preferences: TmdbPreferences,
+    pub renamer: Renamer,
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize, Serialize, Default)]
@@ -22,6 +23,8 @@ struct FileConfiguration {
     pub libraries: Vec<ConfigLibrary>,
     #[serde(default)]
     pub tmdb_preferences: TmdbPreferences,
+    #[serde(default)]
+    pub renamer: Renamer,
 }
 
 impl From<FileConfiguration> for Configuration {
@@ -29,6 +32,7 @@ impl From<FileConfiguration> for Configuration {
         Self {
             libraries: value.libraries.into_iter().map(Option::from).collect(),
             tmdb_preferences: value.tmdb_preferences,
+            renamer: value.renamer,
         }
     }
 }
@@ -38,6 +42,7 @@ impl From<Configuration> for FileConfiguration {
         Self {
             libraries: value.libraries.into_iter().flatten().collect(),
             tmdb_preferences: value.tmdb_preferences,
+            renamer: value.renamer,
         }
     }
 }
@@ -55,6 +60,25 @@ impl Default for TmdbPreferences {
         Self {
             prefered_lang: "en".into(),
             prefered_country: "US".into(),
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize, Serialize)]
+pub struct Renamer {
+    pub dir_format: String,
+    pub file_format: String,
+    pub dir_separator: String,
+    pub file_separator: String,
+}
+
+impl Default for Renamer {
+    fn default() -> Self {
+        Self {
+            dir_format: "{title} ({year})".into(),
+            file_format: "{title}.{year}.{source}".into(),
+            dir_separator: " ".into(),
+            file_separator: ".".into(),
         }
     }
 }

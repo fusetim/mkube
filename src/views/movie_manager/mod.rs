@@ -1,6 +1,8 @@
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow, Context, Result};
 use futures_util::stream::StreamExt;
 use remotefs::fs::Metadata;
+use rt_format::{NoPositionalArguments, ParsedFormat};
+use std::collections::HashMap;
 use std::io::{Cursor, Seek};
 use std::path::PathBuf;
 use tmdb_api::client::Client as TmdbClient;
@@ -12,6 +14,7 @@ pub mod editor;
 pub mod search;
 pub mod table;
 
+use crate::util::FmtStr;
 use crate::views::widgets::InputState;
 use crate::{AppEvent, AppMessage, AppState, ConnectionPool};
 use editor::{MovieEditor, MovieEditorState};
@@ -44,6 +47,7 @@ pub enum MovieManagerEvent {
     ClearMovieList,
     MovieDiscovered((crate::nfo::Movie, usize, PathBuf)),
     MovieUpdated((crate::nfo::Movie, usize, PathBuf)),
+    MovieMoved((usize, PathBuf, PathBuf)),
     SearchMovie((crate::nfo::Movie, usize, PathBuf)),
     EditMovie((crate::nfo::Movie, usize, PathBuf)),
     SearchResults(Vec<tmdb_api::movie::MovieShort>),
@@ -56,6 +60,7 @@ pub enum MovieManagerMessage {
     CreateNfo((u64, usize, PathBuf)), // tmdb_id, fs_id, movie_path
     RetrieveArtworks((crate::nfo::Movie, usize, PathBuf)),
     SaveNfo((crate::nfo::Movie, usize, PathBuf)),
+    Rename((crate::nfo::Movie, usize, PathBuf)),
 }
 
 impl StatefulWidget for MovieManager {
@@ -112,6 +117,10 @@ impl MovieManagerState {
                     app_event
                 {
                     self.table_state.input(app_event)
+                } else if let AppEvent::MovieManagerEvent(MovieManagerEvent::MovieMoved(..)) =
+                    app_event
+                {
+                    self.table_state.input(app_event)
                 } else if let AppEvent::MovieManagerEvent(MovieManagerEvent::OpenTable) = app_event
                 {
                     self.inner = InnerState::Table;
@@ -125,6 +134,10 @@ impl MovieManagerState {
                 {
                     self.table_state.input(app_event)
                 } else if let AppEvent::MovieManagerEvent(MovieManagerEvent::MovieDiscovered(..)) =
+                    app_event
+                {
+                    self.table_state.input(app_event)
+                } else if let AppEvent::MovieManagerEvent(MovieManagerEvent::MovieMoved(..)) =
                     app_event
                 {
                     self.table_state.input(app_event)
@@ -370,6 +383,145 @@ impl From<MovieManagerMessage> for AppMessage {
                             Err(err) => {
                                 log::error!(
                                     "NFO save failed due to the following error:\n{:?}",
+                                    err
+                                );
+                                vec![]
+                            }
+                        }
+                    })
+                }))
+            }
+            MovieManagerMessage::Rename((nfo, fs_id, path)) => {
+                AppMessage::IOFuture(Box::new(move |app_state, _, _, conns: &ConnectionPool| {
+                    let renamer = app_state.config.renamer.clone();
+                    Box::pin(async move {
+                        match async move {
+                            let mut conns_lock = conns.lock().await;
+                            if conns_lock[fs_id].is_none() {
+                                return Err(anyhow!(
+                                    "Rename task failed because fs_id {} does not exist anymore.",
+                                    fs_id
+                                ));
+                            }
+
+                            if let Some(parent) = path.parent() {
+                                let named = HashMap::from([
+                                    ("title", FmtStr::new(nfo.title.as_str())),
+                                    (
+                                        "original_title",
+                                        FmtStr::new(
+                                            nfo.original_title.as_deref().unwrap_or(&nfo.title),
+                                        ),
+                                    ),
+                                    (
+                                        "release_date",
+                                        FmtStr::new(
+                                            nfo.premiered.as_deref().unwrap_or("XXXX-XX-XX"),
+                                        ),
+                                    ),
+                                    (
+                                        "year",
+                                        FmtStr::new(
+                                            nfo.premiered
+                                                .as_deref()
+                                                .map(|date| date[..4].to_owned())
+                                                .unwrap_or("XXXX".into()),
+                                        ),
+                                    ),
+                                    (
+                                        "source",
+                                        FmtStr::new(nfo.source.as_deref().unwrap_or("NONE")),
+                                    ),
+                                ]);
+                                let dir_arg = ParsedFormat::parse(
+                                    &renamer.dir_format,
+                                    &NoPositionalArguments,
+                                    &named,
+                                )
+                                .or(Err(anyhow!("dir_format is invalid!")))?;
+                                let dir_name = deunicode::deunicode_with_tofu(
+                                    &format!("{}", dir_arg),
+                                    &renamer.dir_separator,
+                                )
+                                .replace(
+                                    &[' ', ':', '<', '>', '?', '!', '|', '/', '\\', '*', '"'],
+                                    &renamer.dir_separator,
+                                );
+                                let file_arg = ParsedFormat::parse(
+                                    &renamer.file_format,
+                                    &NoPositionalArguments,
+                                    &named,
+                                )
+                                .or(Err(anyhow!("file_format is invalid!")))?;
+                                let file_name = deunicode::deunicode_with_tofu(
+                                    &format!("{}", file_arg),
+                                    &renamer.file_separator,
+                                )
+                                .replace(
+                                    &[' ', ':', '<', '>', '?', '!', '|', '/', '\\', '*', '"'],
+                                    &renamer.file_separator,
+                                );
+                                let new_dir = parent.with_file_name(dir_name);
+                                conns_lock[fs_id]
+                                    .as_mut()
+                                    .unwrap()
+                                    .as_mut_rfs()
+                                    .mov(&parent, &new_dir)
+                                    .context("failed to rename the parent dir")?;
+                                let entries = conns_lock[fs_id]
+                                    .as_mut()
+                                    .unwrap()
+                                    .as_mut_rfs()
+                                    .list_dir(&new_dir)
+                                    .context("failed to iterate the dir entry")?;
+                                let old_name = path
+                                    .file_stem()
+                                    .ok_or(anyhow!("Movie path does not contain a file stem."))?
+                                    .to_string_lossy()
+                                    .to_owned();
+                                for entry in entries {
+                                    if let Some(name) = entry.path.file_name() {
+                                        if name.to_string_lossy().starts_with(&*old_name) {
+                                            let new_name = name
+                                                .to_string_lossy()
+                                                .replacen(&*old_name, &file_name, 1);
+                                            let new_path = entry.path().with_file_name(new_name);
+                                            conns_lock[fs_id]
+                                                .as_mut()
+                                                .unwrap()
+                                                .as_mut_rfs()
+                                                .mov(&entry.path(), &new_path)
+                                                .context(format!(
+                                                    "failed to move {} to {}!",
+                                                    entry.path.display(),
+                                                    new_path.display()
+                                                ))?;
+                                        }
+                                    }
+                                }
+                                let movie_name = path
+                                    .file_name()
+                                    .ok_or(anyhow!(
+                                        "Oops, movie path does not contain a filename..."
+                                    ))?
+                                    .to_owned();
+                                let new_path = new_dir.join(PathBuf::from(movie_name));
+                                Ok(vec![AppEvent::MovieManagerEvent(
+                                    MovieManagerEvent::MovieMoved((fs_id, path, new_path)),
+                                )])
+                            } else {
+                                return Err(anyhow!(
+                                    "Rename task failed because no parent exists for path {}.",
+                                    path.display()
+                                ));
+                            }
+                        }
+                        .await
+                        {
+                            Ok(ret) => ret,
+                            Err(err) => {
+                                log::error!(
+                                    "Rename task failed due to the following error:\n{:?}",
                                     err
                                 );
                                 vec![]
