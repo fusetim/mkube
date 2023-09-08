@@ -159,7 +159,7 @@ impl From<MovieManagerMessage> for AppMessage {
         match value {
             MovieManagerMessage::RefreshMovies => {
                 AppMessage::Closure(Box::new(|app_state: &mut AppState| {
-                    let futures : Vec<AppEvent> = app_state
+                    let mut futures : Vec<AppEvent> = app_state
                         .libraries
                         .iter()
                         .enumerate()
@@ -168,7 +168,7 @@ impl From<MovieManagerMessage> for AppMessage {
                         .map(|(i, path)| {
                             AppEvent::ContinuationIOFuture(Box::new(move |_,_,_,conns: &ConnectionPool| Box::pin(async move {
                                 let rst : Vec<Result<PathBuf>> = crate::analyze_library((conns, i), path, 4).collect().await;
-                                let mut events = vec![AppEvent::MovieManagerEvent(MovieManagerEvent::ClearMovieList)];
+                                let mut events = Vec::new();
                                 for r in rst {
                                     match r {
                                         Ok(path) => {
@@ -188,7 +188,7 @@ impl From<MovieManagerMessage> for AppMessage {
                             })))
                         })
                         .collect();
-
+                    futures.insert(0, AppEvent::MovieManagerEvent(MovieManagerEvent::ClearMovieList));
                     futures
                 }))
             }
